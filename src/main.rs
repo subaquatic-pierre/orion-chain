@@ -1,3 +1,4 @@
+mod crypto;
 mod network;
 
 use std::{error::Error, sync::Arc, thread, time};

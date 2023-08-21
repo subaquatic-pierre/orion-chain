@@ -242,7 +242,7 @@ mod tests {
         ts_manager.connect(ts1).unwrap();
         ts_manager.connect(ts2).unwrap();
 
-        let server_tx = ArcMut::new(server_tx);
+        let server_tx = Arc::new(Mutex::new(server_tx));
         ts_manager.init(server_tx).unwrap();
 
         // ensure error if transport not found in manager
@@ -254,7 +254,6 @@ mod tests {
         );
 
         let clone = Arc::new(ts_manager);
-        clone.clone();
 
         let handle = thread::spawn(move || {
             clone
