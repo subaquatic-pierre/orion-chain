@@ -1,7 +1,12 @@
 use ecdsa::{
-    elliptic_curve::rand_core::OsRng, signature::Signer, Signature, SigningKey, VerifyingKey,
+    elliptic_curve::{rand_core::OsRng, NonZeroScalar},
+    signature::{DigestVerifier, Signer, Verifier},
+    Signature as ECDASignature, SigningKey, VerifyingKey,
 };
-use k256::{Secp256k1, U256};
+
+use sha256::digest;
+
+use k256::{Secp256k1, SecretKey, U256};
 
 use super::error::KeyPairError;
 // use p256::{NistP256, };
@@ -65,7 +70,22 @@ impl PrivateKey {
         let verifying_key = VerifyingKey::from(&self.key);
         PublicKey { key: verifying_key }
     }
+
+    pub fn sign(&self, msg: &[u8]) -> Signature {
+        let d_str = digest(msg);
+        let d = d_str.as_bytes();
+        let sig: ECDASignature<Secp256k1> = self.key.sign(d);
+
+        Signature { inner: sig }
+    }
 }
+
+#[derive(Clone)]
+pub struct Signature {
+    inner: ECDASignature<Secp256k1>,
+}
+
+impl Signature {}
 
 struct PublicKey {
     key: VerifyingKey<Secp256k1>,
@@ -108,6 +128,15 @@ impl PublicKey {
             ));
         }
         Ok(Self { key: res.unwrap() })
+    }
+
+    pub fn verify(&self, msg: &[u8], signature: Signature) -> bool {
+        let d_str = digest(msg);
+        let d = d_str.as_bytes();
+        if self.key.verify(d, &signature.inner).is_err() {
+            return false;
+        };
+        true
     }
 }
 
@@ -152,5 +181,23 @@ mod test {
 
         assert_eq!(pub_key.to_bytes().len(), 33);
         assert_eq!(66, pub_key.to_hex().len());
+    }
+    #[test]
+    fn test_sign() {
+        let pvt_key = PrivateKey::new();
+        let pub_key = pvt_key.pub_key();
+
+        let pvt_key_2 = PrivateKey::new();
+        let pub_key_2 = pvt_key_2.pub_key();
+
+        let msg = b"Hello world";
+
+        let sig = pvt_key.sign(msg);
+        let is_valid = pub_key.verify(msg, sig.clone());
+
+        let not_valid = pub_key_2.verify(msg, sig);
+
+        assert_eq!(is_valid, true);
+        assert_eq!(not_valid, false);
     }
 }

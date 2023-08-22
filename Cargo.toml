@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ecdsa = {version = "0.16.8"}
+ecdsa = {version = "0.16.8", feature=["verifying","der","pem","alloc"]}
 hex = "0.4.3"
 k256 = "0.13.1"
+p256 = "0.13.2"
 rand = {version = "0.8.5"}
+sha256 = "1.4.0"
+signature = "2.1.0"
