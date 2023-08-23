@@ -87,11 +87,73 @@ pub struct Signature {
 
 impl Signature {}
 
+pub struct Address {
+    inner: [u8; 20],
+}
+
+impl Address {
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.inner)
+    }
+    pub fn to_bytes(&self) -> [u8; 20] {
+        self.inner
+    }
+
+    pub fn from_hex(hex_str: &str) -> Result<Self, KeyPairError> {
+        if hex_str.len() != 40 {
+            return Err(KeyPairError::GenerateError(
+                "incorrect hex format for address".to_string(),
+            ));
+        }
+
+        let bytes = hex::decode(hex_str);
+
+        if bytes.is_err() {
+            return Err(KeyPairError::GenerateError(
+                "unable to generate bytes from hex".to_string(),
+            ));
+        }
+
+        let bytes = bytes.unwrap();
+
+        Self::from_bytes(&bytes)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeyPairError> {
+        let mut buf = [0_u8; 20];
+        if bytes.len() != 20 {
+            return Err(KeyPairError::GenerateError(
+                "incorrect byte format for address".to_string(),
+            ));
+        }
+
+        for (i, &b) in bytes.iter().enumerate() {
+            buf[i] = b
+        }
+
+        Ok(Self { inner: buf })
+    }
+}
+
 struct PublicKey {
     key: VerifyingKey<Secp256k1>,
 }
 
 impl PublicKey {
+    pub fn address(&self) -> Result<Address, KeyPairError> {
+        let bytes = self.to_bytes();
+        let mut addr_bytes = [0_u8; 20];
+
+        for (i, &b) in bytes.iter().rev().enumerate() {
+            if i == 20 {
+                break;
+            }
+            addr_bytes[i] = b
+        }
+
+        Address::from_bytes(&addr_bytes)
+    }
+
     pub fn to_bytes(&self) -> [u8; 33] {
         let mut buf = [0_u8; 33];
 
@@ -199,5 +261,59 @@ mod test {
 
         assert_eq!(is_valid, true);
         assert_eq!(not_valid, false);
+    }
+    #[test]
+    fn test_address() {
+        let pvt_key = PrivateKey::new();
+        let pub_key = pvt_key.pub_key();
+
+        let pvt_key_2 = PrivateKey::new();
+        let pub_key_2 = pvt_key_2.pub_key();
+
+        let addr = pub_key.address().unwrap();
+
+        let bytes = pub_key.to_bytes();
+
+        let mut addr_bytes = [0_u8; 20];
+
+        for (i, &b) in bytes.iter().rev().enumerate() {
+            if i == 20 {
+                break;
+            }
+            addr_bytes[i] = b
+        }
+
+        let addr_2 = Address::from_bytes(&addr_bytes).unwrap();
+
+        assert_eq!(addr.to_hex(), addr_2.to_hex());
+
+        let bytes = pub_key_2.to_bytes();
+
+        let mut addr_bytes = [0_u8; 20];
+
+        for (i, &b) in bytes.iter().rev().enumerate() {
+            if i == 20 {
+                break;
+            }
+            addr_bytes[i] = b
+        }
+
+        let addr_3 = Address::from_bytes(&addr_bytes).unwrap();
+        assert_ne!(addr.to_hex(), addr_3.to_hex());
+
+        let bytes = pub_key_2.to_bytes();
+        let mut addr_bytes = [0_u8; 20];
+
+        for (i, &b) in bytes.iter().rev().enumerate() {
+            if i == 20 {
+                break;
+            }
+            addr_bytes[i] = b
+        }
+
+        let new_hex = hex::encode(&addr_bytes);
+        let addr_4 = Address::from_hex(&new_hex).unwrap();
+
+        assert_eq!(pub_key_2.address().unwrap().to_hex(), addr_4.to_hex());
     }
 }
