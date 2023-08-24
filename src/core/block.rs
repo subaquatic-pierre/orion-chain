@@ -1,5 +1,6 @@
 use std::io::{BufWriter, Read, Write};
 
+use ecdsa::signature::rand_core::block;
 use k256::pkcs8::der::Reader;
 
 use crate::crypto::{
@@ -8,7 +9,10 @@ use crate::crypto::{
 };
 
 use super::{
-    encoding::ByteEncoding, error::CoreError, header::Header, transaction::Transaction,
+    encoding::ByteEncoding,
+    error::CoreError,
+    header::{random_header, Header},
+    transaction::Transaction,
     utils::timestamp,
 };
 
@@ -31,6 +35,10 @@ impl<'a> Block<'a> {
             signature: None,
             hash: None,
         }
+    }
+
+    pub fn header(&self) -> &Header {
+        self.header
     }
 
     pub fn sign(&mut self, private_key: PrivateKey) -> Result<(), CoreError> {
@@ -70,14 +78,38 @@ impl<'a> Block<'a> {
     }
 
     pub fn hash(&mut self) -> Hash {
-        let mut hashable_bytes = &self.hashable_data();
+        let hashable_bytes = &self.hashable_data();
 
         if self.hash.is_none() {
-            self.hash = Some(Hash::sha256(&hashable_bytes).unwrap());
+            self.hash = Some(Hash::sha256(hashable_bytes).unwrap());
         }
 
         self.hash.clone().unwrap()
     }
+
+    pub fn header_data(&self) -> Vec<u8> {
+        self.header.to_bytes()
+    }
+
+    pub fn height(&self) -> u64 {
+        self.header.height()
+    }
+
+    // TODO: ENCODE AND DECODE
+    pub fn encode(&self, mut writer: impl Write) -> Result<(), CoreError> {
+        match writer.write_all(&self.header.to_bytes()) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(CoreError::Block(format!("unable to encode block {e}"))),
+        }
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, CoreError> {
+        todo!()
+    }
+
+    // ---
+    // Private Methods
+    // ---
 
     fn txs_bytes(&self) -> Vec<u8> {
         let mut txs_bytes = vec![];
@@ -93,22 +125,6 @@ impl<'a> Block<'a> {
         data.extend_from_slice(&self.header_data());
         data.extend_from_slice(&self.txs_bytes());
         data
-    }
-
-    pub fn header_data(&self) -> Vec<u8> {
-        self.header.to_bytes()
-    }
-
-    // TODO: ENCODE AND DECODE
-    pub fn encode(&self, mut writer: impl Write) -> Result<(), CoreError> {
-        match writer.write_all(&self.header.to_bytes()) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(CoreError::Block(format!("unable to encode block {e}"))),
-        }
-    }
-
-    pub fn decode(bytes: &[u8]) -> Result<Self, CoreError> {
-        todo!()
     }
 }
 
@@ -157,4 +173,16 @@ mod test {
 
         assert_eq!(res, msg);
     }
+}
+
+pub fn random_block(header: &Header) -> Block {
+    Block::new(&header, vec![])
+}
+
+pub fn random_signed_block(header: &Header) -> Block {
+    let mut block = Block::new(header, vec![]);
+    let pvt_key = PrivateKey::new();
+
+    block.sign(pvt_key).unwrap();
+    block
 }

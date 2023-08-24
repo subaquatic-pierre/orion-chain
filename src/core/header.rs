@@ -13,8 +13,14 @@ pub struct Header {
     version: u8,
     data_hash: Hash,
     prev_hash: Hash,
-    height: u32,
+    height: u64,
     timestamp: u64,
+}
+
+impl Header {
+    pub fn height(&self) -> u64 {
+        self.height
+    }
 }
 
 impl ByteDecoding for Header {
@@ -40,8 +46,8 @@ impl ByteDecoding for Header {
 
         offset += 32;
 
-        let height = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
+        let height = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
+        offset += 8;
 
         let timestamp = u64::from_be_bytes(data[offset..].try_into().unwrap());
 
@@ -133,7 +139,7 @@ mod test {
 
         let bytes = header.to_bytes();
 
-        assert_eq!(bytes.len(), 77);
+        assert_eq!(bytes.len(), 81);
 
         let header_2 = Header::from_bytes(&bytes);
 
@@ -169,7 +175,7 @@ mod test {
     }
 }
 
-pub fn random_header(height: u32) -> Header {
+pub fn random_header(height: u64) -> Header {
     let prev_hash = random_hash();
     let data_hash = random_hash();
     let timestamp = timestamp(SystemTime::now());

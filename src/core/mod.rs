@@ -4,6 +4,7 @@ pub mod encoding;
 pub mod error;
 pub mod hasher;
 pub mod header;
-pub mod store;
+pub mod storage;
 pub mod transaction;
 pub mod utils;
+pub mod validator;
