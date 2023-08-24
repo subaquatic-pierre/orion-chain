@@ -169,7 +169,7 @@ mod test {
     }
 }
 
-fn random_header(height: u32) -> Header {
+pub fn random_header(height: u32) -> Header {
     let prev_hash = random_hash();
     let data_hash = random_hash();
     let timestamp = timestamp(SystemTime::now());

@@ -5,27 +5,31 @@ use std::io::{Read, Write};
 use super::block::Block;
 use super::error::CoreError;
 
-pub trait Encoder<T, E>
-where
-    E: Error,
-{
-    fn encode(&self, writer: impl Write, data: impl ByteEncoding) -> Result<(), E>;
-}
+// pub trait Encoder {
+//     fn encode(&self, writer: impl Write, data: impl ByteEncoding) -> Result<(), Box<dyn Error>>;
+// }
 
-pub trait Decoder<T, E>
-where
-    E: Error,
-{
-    fn decode(writer: impl Read, data: &T) -> Result<(), E>;
-}
+// pub trait Decoder<T, E>
+// where
+//     E: Error,
+// {
+//     fn decode(writer: impl Read, data: &T) -> Result<(), E>;
+// }
 
-pub struct BlockEncoder {}
+// pub struct BlockEncoder {
+//     // type Error: Error;
+// }
 
-impl<'a> Encoder<Block<'a>, CoreError> for BlockEncoder {
-    fn encode(&self, writer: impl Write, data: impl ByteEncoding) -> Result<(), CoreError> {
-        Ok(())
-    }
-}
+// impl Encoder for BlockEncoder {
+//     fn encode(
+//         &self,
+//         mut writer: impl Write,
+//         data: impl ByteEncoding,
+//     ) -> Result<(), Box<dyn Error>> {
+//         writer.write_all(&data.to_bytes())?;
+//         Ok(())
+//     }
+// }
 
 pub trait ByteEncoding {
     fn to_bytes(&self) -> Vec<u8>;
