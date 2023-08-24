@@ -303,7 +303,6 @@ dependencies = [
  "p256",
  "rand",
  "sha256",
- "signature",
 ]
 
 [[package]]

@@ -1,16 +1,20 @@
 use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
-pub enum KeyPairError {
-    GenerateError(String),
+pub enum CryptoError {
+    GenerateKey(String),
+    HashError(String),
+    SignatureError(String),
 }
 
-impl Error for KeyPairError {}
+impl Error for CryptoError {}
 
-impl Display for KeyPairError {
+impl Display for CryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::GenerateError(msg) => write!(f, "{msg}"),
+            Self::GenerateKey(msg) => write!(f, "{msg}"),
+            Self::HashError(msg) => write!(f, "{msg}"),
+            Self::SignatureError(msg) => write!(f, "{msg}"),
             _ => write!(f, "Unknown keypair error"),
         }
     }
