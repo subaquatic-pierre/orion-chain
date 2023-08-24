@@ -3,5 +3,7 @@ pub mod blockchain;
 pub mod encoding;
 pub mod error;
 pub mod hasher;
+pub mod header;
 pub mod store;
 pub mod transaction;
+pub mod utils;

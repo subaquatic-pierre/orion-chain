@@ -2,7 +2,7 @@ use ecdsa::{signature::Verifier, VerifyingKey};
 use k256::Secp256k1;
 use std::fmt::Display;
 
-use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::{address::Address, error::CryptoError, private_key::PrivateKey, signature::Signature};
 
@@ -37,7 +37,10 @@ impl PublicKey {
     }
 }
 
-impl ByteEncoding<PublicKey, CryptoError> for PublicKey {
+impl ByteDecoding for PublicKey {
+    type Target = Self;
+    type Error = CryptoError;
+
     fn from_bytes(data: &[u8]) -> Result<PublicKey, CryptoError> {
         let res = VerifyingKey::<Secp256k1>::from_sec1_bytes(data);
         if res.is_err() {
@@ -47,7 +50,9 @@ impl ByteEncoding<PublicKey, CryptoError> for PublicKey {
         }
         Ok(Self { key: res.unwrap() })
     }
+}
 
+impl ByteEncoding for PublicKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buf = [0_u8; 33];
 
@@ -61,10 +66,15 @@ impl ByteEncoding<PublicKey, CryptoError> for PublicKey {
     }
 }
 
-impl HexEncoding<PublicKey, CryptoError> for PublicKey {
+impl HexEncoding for PublicKey {
     fn to_hex(&self) -> String {
         hex::encode(self.to_bytes())
     }
+}
+
+impl HexDecoding for PublicKey {
+    type Target = Self;
+    type Error = CryptoError;
 
     fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
         let res = hex::decode(hex_str);

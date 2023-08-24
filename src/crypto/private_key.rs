@@ -5,10 +5,11 @@ use ecdsa::{
 use k256::Secp256k1;
 use std::fmt::Display;
 
-use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::{error::CryptoError, public_key::PublicKey, signature::Signature};
 
+#[derive(Clone)]
 pub struct PrivateKey {
     key: SigningKey<Secp256k1>,
 }
@@ -32,7 +33,10 @@ impl PrivateKey {
     }
 }
 
-impl ByteEncoding<PrivateKey, CryptoError> for PrivateKey {
+impl ByteDecoding for PrivateKey {
+    type Target = Self;
+    type Error = CryptoError;
+
     fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let mut _bytes = [0_u8; 32];
         if bytes.len() != 32 {
@@ -49,7 +53,9 @@ impl ByteEncoding<PrivateKey, CryptoError> for PrivateKey {
             key: SigningKey::<Secp256k1>::from_bytes(&_bytes.into()).unwrap(),
         })
     }
+}
 
+impl ByteEncoding for PrivateKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buf = [0_u8; 32];
         for (i, v) in self.key.to_bytes().iter().copied().enumerate() {
@@ -59,10 +65,9 @@ impl ByteEncoding<PrivateKey, CryptoError> for PrivateKey {
     }
 }
 
-impl HexEncoding<PrivateKey, CryptoError> for PrivateKey {
-    fn to_hex(&self) -> String {
-        hex::encode(self.to_bytes())
-    }
+impl HexDecoding for PrivateKey {
+    type Target = Self;
+    type Error = CryptoError;
 
     fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
         if hex_str.len() != 64 {
@@ -77,6 +82,12 @@ impl HexEncoding<PrivateKey, CryptoError> for PrivateKey {
         }
 
         Self::from_bytes(&h_bytes)
+    }
+}
+
+impl HexEncoding for PrivateKey {
+    fn to_hex(&self) -> String {
+        hex::encode(self.to_bytes())
     }
 }
 

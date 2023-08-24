@@ -3,11 +3,12 @@ use std::fmt::Display;
 use ecdsa::elliptic_curve::rand_core;
 use rand::random;
 
-use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::error::CryptoError;
 use super::utils::{random_bytes, random_hash};
 
+#[derive(Clone)]
 pub struct Hash {
     inner: [u8; 32],
 }
@@ -27,6 +28,18 @@ impl Hash {
         Ok(Self { inner: buf })
     }
 
+    pub fn sha256(data: &[u8]) -> Result<Self, CryptoError> {
+        let bytes = hex::decode(sha256::digest(data));
+
+        if bytes.is_err() {
+            return Err(CryptoError::HashError(
+                "unable to hex decode sha256 digest".to_string(),
+            ));
+        }
+        let bytes = bytes.unwrap();
+        Self::new(&bytes)
+    }
+
     pub fn is_zero(&self) -> bool {
         for &b in self.inner.iter() {
             if b != 0 {
@@ -37,26 +50,35 @@ impl Hash {
     }
 }
 
-impl ByteEncoding<Hash, CryptoError> for Hash {
+impl ByteDecoding for Hash {
+    type Target = Self;
+    type Error = CryptoError;
+
     fn from_bytes(data: &[u8]) -> Result<Self, CryptoError> {
         Self::new(data)
     }
+}
 
+impl ByteEncoding for Hash {
     fn to_bytes(&self) -> Vec<u8> {
         self.inner.to_vec()
     }
 }
 
-impl HexEncoding<Hash, CryptoError> for Hash {
+impl HexEncoding for Hash {
+    fn to_hex(&self) -> String {
+        hex::encode(self.inner)
+    }
+}
+
+impl HexDecoding for Hash {
+    type Target = Self;
+    type Error = CryptoError;
     fn from_hex(data: &str) -> Result<Hash, CryptoError> {
         match hex::decode(data) {
             Ok(bytes) => Self::new(&bytes),
             Err(e) => Err(CryptoError::HashError("unable to decode hash".to_string())),
         }
-    }
-
-    fn to_hex(&self) -> String {
-        hex::encode(self.inner)
     }
 }
 
@@ -74,9 +96,7 @@ mod test {
     fn test_hash() {
         let random_hash = random_hash();
 
-        assert_eq!(random_hash.is_err(), false);
-
-        let random_hash = random_hash.unwrap();
+        let random_hash = random_hash;
 
         let random_bytes = random_bytes(32);
 
@@ -109,5 +129,19 @@ mod test {
         assert_eq!(hash_1.to_string(), hash_2.to_string());
 
         assert_eq!(random_bytes.len(), 32);
+
+        let hash = sha256::digest("Hello world, Data is cool");
+
+        let h = Hash::sha256(b"Hello world, Data is cool");
+
+        assert!(h.is_ok());
+
+        let hash = h.unwrap();
+
+        assert_eq!(hash.to_bytes().len(), 32);
+
+        let sha_h = sha256::digest("Hello world, Data is cool");
+
+        assert_eq!(hash.to_string(), sha_h);
     }
 }

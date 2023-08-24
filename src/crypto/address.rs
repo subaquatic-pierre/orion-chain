@@ -8,7 +8,7 @@ use sha256::digest;
 use std::ops::Deref;
 use std::{error::Error, fmt::Display};
 
-use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::{error::CryptoError, private_key::PrivateKey};
 
@@ -26,7 +26,10 @@ impl Deref for Address {
 
 impl Address {}
 
-impl ByteEncoding<Address, CryptoError> for Address {
+impl ByteDecoding for Address {
+    type Target = Self;
+    type Error = CryptoError;
+
     fn from_bytes(data: &[u8]) -> Result<Address, CryptoError> {
         let mut buf = [0_u8; 20];
         if data.len() != 20 {
@@ -41,12 +44,23 @@ impl ByteEncoding<Address, CryptoError> for Address {
 
         Ok(Self { inner: buf })
     }
+}
 
+impl ByteEncoding for Address {
     fn to_bytes(&self) -> Vec<u8> {
         self.inner.to_vec()
     }
 }
-impl HexEncoding<Address, CryptoError> for Address {
+
+impl HexEncoding for Address {
+    fn to_hex(&self) -> String {
+        hex::encode(self.inner)
+    }
+}
+
+impl HexDecoding for Address {
+    type Target = Self;
+    type Error = CryptoError;
     fn from_hex(data: &str) -> Result<Address, CryptoError> {
         if data.len() != 40 {
             return Err(CryptoError::GenerateKey(
@@ -65,10 +79,6 @@ impl HexEncoding<Address, CryptoError> for Address {
         let bytes = bytes.unwrap();
 
         Self::from_bytes(&bytes)
-    }
-
-    fn to_hex(&self) -> String {
-        hex::encode(self.inner)
     }
 }
 

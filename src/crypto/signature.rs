@@ -2,7 +2,7 @@ use ecdsa::Signature as ECDASignature;
 use k256::{Secp256k1, SecretKey, U256};
 use std::fmt::Display;
 
-use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::{error::CryptoError, private_key::PrivateKey};
 
@@ -17,10 +17,15 @@ impl Signature {
     }
 }
 
-impl HexEncoding<Signature, CryptoError> for Signature {
+impl HexEncoding for Signature {
     fn to_hex(&self) -> String {
         hex::encode(self.to_bytes())
     }
+}
+
+impl HexDecoding for Signature {
+    type Target = Self;
+    type Error = CryptoError;
 
     fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
         let bytes = hex::decode(hex_str);
@@ -40,10 +45,9 @@ impl HexEncoding<Signature, CryptoError> for Signature {
     }
 }
 
-impl ByteEncoding<Signature, CryptoError> for Signature {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.inner.to_vec()
-    }
+impl ByteDecoding for Signature {
+    type Target = Self;
+    type Error = CryptoError;
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         match ECDASignature::from_slice(bytes) {
@@ -52,6 +56,12 @@ impl ByteEncoding<Signature, CryptoError> for Signature {
                 "unable to generate signature from bytes: {e}"
             ))),
         }
+    }
+}
+
+impl ByteEncoding for Signature {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.inner.to_vec()
     }
 }
 
