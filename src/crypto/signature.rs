@@ -6,7 +6,7 @@ use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding
 
 use super::{error::CryptoError, private_key::PrivateKey};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Signature {
     pub inner: ECDASignature<Secp256k1>,
 }

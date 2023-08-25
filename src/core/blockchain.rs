@@ -1,4 +1,6 @@
-use crate::core::storage::MemoryStorage;
+use log::info;
+
+use crate::core::{hasher::Hasher, storage::MemoryStorage};
 
 use super::{
     block::Block,
@@ -69,6 +71,12 @@ impl<'a> Blockchain<'a> {
     fn add_block_without_validation(&mut self, block: &'a Block) -> Result<(), CoreError> {
         self.headers.push(block.header());
 
+        info!(
+            "adding new block: height: {}, header_hash:{}",
+            block.height(),
+            block.header().hash()
+        );
+
         self.store.put(block)
     }
 }
@@ -86,6 +94,9 @@ impl<'a> Default for Blockchain<'a> {
 #[cfg(test)]
 mod test {
     use log::{error, info};
+    fn init() {
+        env_logger::init();
+    }
 
     use crate::{
         core::{
@@ -95,6 +106,7 @@ mod test {
             validator,
         },
         crypto::{hash::Hash, utils::random_hash},
+        setup,
     };
 
     use super::*;

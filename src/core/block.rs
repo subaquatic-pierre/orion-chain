@@ -17,6 +17,7 @@ use super::{
     utils::timestamp,
 };
 
+#[derive(Debug)]
 pub struct Block<'a> {
     header: &'a Header,
     transactions: Vec<Transaction>,

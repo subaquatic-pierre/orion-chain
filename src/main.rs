@@ -4,7 +4,11 @@ mod core;
 mod crypto;
 mod network;
 
-use std::{error::Error, sync::Arc, thread, time};
+use std::{
+    error::Error,
+    sync::{Arc, Once},
+    thread, time,
+};
 
 use network::{
     server::{Server, ServerConfig},
@@ -23,9 +27,16 @@ impl Ticker {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+static INIT: Once = Once::new();
 
+/// Setup function that is only run once, even if called multiple times.
+fn setup() {
+    INIT.call_once(|| {
+        env_logger::init();
+    });
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
     let ts1 = LocalTransport::new("local");
     let ts2 = LocalTransport::new("custom");
     let ts3 = LocalTransport::new("remote");

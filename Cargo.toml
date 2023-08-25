@@ -10,7 +10,7 @@ ecdsa = {version = "0.16.8", feature=["verifying","der","pem","alloc"]}
 env_logger = "0.10.0"
 hex = "0.4.3"
 k256 = {version="0.13.1"}
-log = "0.4.20"
+log = {version="0.4.20"}
 p256 = "0.13.2"
 rand = {version = "0.8.5"}
 sha256 = "1.4.0"
