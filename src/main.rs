@@ -1,3 +1,5 @@
+use log::{info, trace, warn};
+
 mod core;
 mod crypto;
 mod network;
@@ -22,6 +24,8 @@ impl Ticker {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let ts1 = LocalTransport::new("local");
     let ts2 = LocalTransport::new("custom");
     let ts3 = LocalTransport::new("remote");

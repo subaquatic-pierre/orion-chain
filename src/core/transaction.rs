@@ -16,7 +16,7 @@ pub struct Transaction {
     pub data: Vec<u8>,
     hash: Hash,
     pub signature: Option<Signature>,
-    pub public_key: Option<PublicKey>,
+    pub signer: Option<PublicKey>,
 }
 
 impl Transaction {
@@ -29,7 +29,7 @@ impl Transaction {
             data_len,
             hash,
             signature: None,
-            public_key: None,
+            signer: None,
         }
     }
 
@@ -42,14 +42,14 @@ impl Transaction {
     }
 
     pub fn sign(&mut self, private_key: PrivateKey) -> Result<(), CoreError> {
-        if self.public_key.is_some() | self.signature.is_some() {
+        if self.signer.is_some() | self.signature.is_some() {
             return Err(CoreError::Transaction(
                 "transaction already is already signed".to_string(),
             ));
         }
 
         let sig = private_key.sign(&self.data);
-        self.public_key = Some(private_key.pub_key());
+        self.signer = Some(private_key.pub_key());
         self.signature = Some(sig);
 
         Ok(())
@@ -62,7 +62,7 @@ impl Transaction {
             ));
         }
 
-        match &self.public_key {
+        match &self.signer {
             Some(key) => {
                 if !key.verify(&self.data, self.signature.clone().unwrap()) {
                     return Err(CoreError::Transaction(
@@ -106,7 +106,7 @@ impl ByteEncoding for Transaction {
         buf.extend_from_slice(&sig_bytes);
 
         // append public key
-        let sig_bytes = match &self.public_key {
+        let sig_bytes = match &self.signer {
             Some(key) => {
                 let mut bytes = vec![1_u8];
                 bytes.extend_from_slice(&key.to_bytes());
@@ -190,7 +190,7 @@ impl ByteDecoding for Transaction {
         // inc offset for has key byte
         offset += 1;
 
-        let public_key: Option<PublicKey> = if has_pub_key_byte == 0 {
+        let signer: Option<PublicKey> = if has_pub_key_byte == 0 {
             None
         } else {
             match PublicKey::from_bytes(&data[offset..]) {
@@ -208,7 +208,7 @@ impl ByteDecoding for Transaction {
             hash,
             data: data_buf,
             signature,
-            public_key,
+            signer,
         })
     }
 }
@@ -306,7 +306,7 @@ mod test {
         assert!(tx_2.verify().is_ok());
 
         let tx_2_sig = tx_2.signature.unwrap();
-        let tx_2_pub_key = tx_2.public_key.unwrap();
+        let tx_2_pub_key = tx_2.signer.unwrap();
 
         let pub_key = priv_key.pub_key();
 
@@ -352,7 +352,7 @@ mod test {
 
         assert_eq!(tx_2_hash.len(), 64);
 
-        let tx_2_pub_key = tx_2.public_key.unwrap();
+        let tx_2_pub_key = tx_2.signer.unwrap();
 
         let pub_key = priv_key.pub_key();
 
@@ -361,4 +361,15 @@ mod test {
 
         assert_eq!(tx_2_hash, tx_2_hash);
     }
+}
+
+pub fn random_tx() -> Transaction {
+    Transaction::new(&[1, 2, 3])
+}
+
+pub fn random_signed_tx() -> Transaction {
+    let mut tx = random_tx();
+    let pvt = PrivateKey::new();
+    tx.sign(pvt).unwrap();
+    tx
 }

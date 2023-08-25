@@ -9,8 +9,9 @@ use crate::crypto::{
 };
 
 use super::{
-    encoding::ByteEncoding,
+    encoding::{ByteDecoding, ByteEncoding},
     error::CoreError,
+    hasher::Hasher,
     header::{random_header, Header},
     transaction::Transaction,
     utils::timestamp,
@@ -111,6 +112,7 @@ impl<'a> Block<'a> {
     // Private Methods
     // ---
 
+    // get sequential bytes of all transactions
     fn txs_bytes(&self) -> Vec<u8> {
         let mut txs_bytes = vec![];
         for tx in self.transactions.iter() {
@@ -120,11 +122,24 @@ impl<'a> Block<'a> {
         txs_bytes
     }
 
+    // get data to be hashed for the block
     fn hashable_data(&self) -> Vec<u8> {
         let mut data = vec![];
         data.extend_from_slice(&self.header_data());
         data.extend_from_slice(&self.txs_bytes());
         data
+    }
+}
+
+impl<'a> ByteEncoding for Block<'a> {
+    fn to_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
+}
+
+impl<'a> Hasher<Block<'a>> for Block<'a> {
+    fn hash(&self) -> Hash {
+        Hash::sha256(&self.hashable_data()).unwrap()
     }
 }
 
@@ -136,7 +151,7 @@ mod test {
 
     #[test]
     fn test_sign_block() {
-        let header = random_header(0);
+        let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
         let mut block = Block::new(&header, vec![]);
@@ -149,7 +164,7 @@ mod test {
 
     #[test]
     fn test_verify_block() {
-        let header = random_header(0);
+        let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
         let mut block = Block::new(&header, vec![]);

@@ -4,11 +4,12 @@ use std::time::SystemTime;
 use super::{
     encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
     error::CoreError,
+    hasher::Hasher,
     transaction::Transaction,
     utils::timestamp,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Header {
     version: u8,
     data_hash: Hash,
@@ -20,6 +21,16 @@ pub struct Header {
 impl Header {
     pub fn height(&self) -> u64 {
         self.height
+    }
+
+    pub fn prev_hash(&self) -> Hash {
+        self.prev_hash.clone()
+    }
+}
+
+impl Hasher<Header> for Header {
+    fn hash(&self) -> Hash {
+        Hash::sha256(&self.to_bytes()).unwrap()
     }
 }
 
@@ -135,7 +146,7 @@ mod test {
 
     #[test]
     fn test_header_parse_bytes() {
-        let header = random_header(0);
+        let header = random_header(0, random_hash());
 
         let bytes = header.to_bytes();
 
@@ -155,7 +166,7 @@ mod test {
     }
 
     fn test_header_parse_hex() {
-        let header = random_header(0);
+        let header = random_header(0, random_hash());
 
         let hex_str = header.to_hex();
 
@@ -175,9 +186,9 @@ mod test {
     }
 }
 
-pub fn random_header(height: u64) -> Header {
-    let prev_hash = random_hash();
+pub fn random_header(height: u64, prev_hash: Hash) -> Header {
     let data_hash = random_hash();
+    let prev_hash = prev_hash;
     let timestamp = timestamp(SystemTime::now());
     let version = 1;
 

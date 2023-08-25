@@ -1,3 +1,5 @@
+use log::{info, warn};
+
 use crate::network::error::NetworkError;
 use std::borrow::{BorrowMut, Cow};
 
@@ -137,17 +139,17 @@ impl TransportManager<LocalTransport> {
         let from_ts = self.peers.iter().find(|&ts| ts.address() == from_addr);
 
         if from_addr == to_addr {
-            println!("cannot send to self: {from_addr} - {to_addr}");
-            return Err(NetworkError::NotFound(format!(
-                "cannot send to self: {from_addr}"
-            )));
+            let msg = format!(
+                "cannot send rpc message to self, from address: {from_addr}, to address: {to_addr}"
+            );
+            warn!("{msg}");
+            return Err(NetworkError::NotFound(msg));
         }
 
         if from_ts.is_none() {
-            println!("from transport not found: {from_addr}");
-            return Err(NetworkError::NotFound(format!(
-                "from transport not found: {from_addr}"
-            )));
+            let msg = format!("to transport address not found: {from_addr}");
+            warn!("{msg}");
+            return Err(NetworkError::NotFound(msg));
         }
 
         let to_ts = self.peers.iter().find(|&ts| ts.address() == to_addr);
@@ -156,10 +158,9 @@ impl TransportManager<LocalTransport> {
             to_ts.send_msg(from_addr, payload)?;
             Ok(())
         } else {
-            println!("to transport not found: {to_addr}");
-            Err(NetworkError::NotFound(format!(
-                "to transport not found: {to_addr}"
-            )))
+            let msg = format!("to transport address not found: {to_addr}");
+            warn!("{msg}");
+            Err(NetworkError::NotFound(msg))
         }
     }
 
@@ -186,9 +187,7 @@ impl TransportManager<LocalTransport> {
                     while let Ok(msg) = rx.recv() {
                         if let Ok(tx) = tx.lock() {
                             if let Err(e) = tx.send(msg.clone()) {
-                                println!(
-                                    "there was an error sending message to sever: {msg:?}, {e}"
-                                )
+                                warn!("there was an error sending message to sever: {msg:?}, {e}")
                             }
                         }
                     }

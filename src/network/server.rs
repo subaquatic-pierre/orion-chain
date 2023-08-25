@@ -61,27 +61,3 @@ impl Server<LocalTransport> {
         });
     }
 }
-
-// impl Server<HttpTransport> {
-//     pub fn new(config: ServerConfig<HttpTransport>) -> Self {
-//         let (tx, rx) = channel::<RPC>();
-//         let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
-//         let ts_manager = Arc::new(config.ts_manager);
-
-//         Self {
-//             transport_manager: ts_manager,
-//             rx,
-//             tx,
-//         }
-//     }
-
-//     pub fn start(&self) {
-//         let ts_manager = self.transport_manager.clone();
-//         let tx = self.tx.clone();
-//         thread::spawn(|| loop {
-//             println!("something");
-
-//             thread::sleep(time::Duration::from_secs(5));
-//         });
-//     }
-// }

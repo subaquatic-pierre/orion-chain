@@ -8,7 +8,7 @@ use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding
 use super::error::CryptoError;
 use super::utils::{random_bytes, random_hash};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Hash {
     inner: [u8; 32],
 }
@@ -87,6 +87,14 @@ impl Display for Hash {
         f.write_str(&self.to_hex())
     }
 }
+
+impl PartialEq for Hash {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string() == other.to_string()
+    }
+}
+
+impl Eq for Hash {}
 
 #[cfg(test)]
 mod test {
