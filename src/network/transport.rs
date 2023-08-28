@@ -33,9 +33,9 @@ impl<T> Deref for ArcMut<T> {
 
 #[derive(Debug, Clone)]
 pub struct RPC {
-    sender: NetAddr,
-    receiver: NetAddr,
-    payload: Payload,
+    pub sender: NetAddr,
+    pub receiver: NetAddr,
+    pub payload: Payload,
 }
 
 pub trait Transport {

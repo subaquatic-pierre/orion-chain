@@ -1,4 +1,6 @@
+use crypto::private_key::PrivateKey;
 use log::{info, trace, warn};
+use rand::Rng;
 
 mod core;
 mod crypto;
@@ -46,7 +48,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     ts_manager.connect(ts2)?;
     ts_manager.connect(ts3)?;
 
-    let config = ServerConfig { ts_manager };
+    let config = ServerConfig {
+        ts_manager,
+        block_time: time::Duration::from_secs(20),
+        private_key: Some(PrivateKey::new()),
+    };
+
     let mut server = Server::new(config);
 
     let ticker = ArcMut::new(Ticker { val: 0 });
@@ -70,7 +77,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     _ => "local".to_string(),
                 };
 
-                ts_manager.send_msg(addr, "remote".to_string(), vec![]);
+                let random_number: u8 = rand::thread_rng().gen();
+                let string = format!("hello {random_number}");
+                match ts_manager.send_msg(addr, "remote".to_string(), string.as_bytes().to_vec()) {
+                    Ok(_) => (),
+                    Err(e) => warn!("{e}"),
+                }
                 // .expect("unable to send message");
             }
             thread::sleep(time::Duration::from_secs(3));

@@ -18,6 +18,13 @@ pub struct Header {
     timestamp: u64,
 }
 
+// impl Header {
+//     pub fn new(height:u64) -> Self {
+//         Self { version: 1, data_hash: (), prev_hash: (), height: (), timestamp: () }
+
+//     }
+// }
+
 #[derive(Clone, Debug)]
 pub struct Headers<'a> {
     headers: Vec<&'a Header>,
