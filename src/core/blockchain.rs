@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex, MutexGuard};
+
 use log::info;
 
 use crate::{
@@ -8,14 +10,14 @@ use crate::{
 use super::{
     block::Block,
     error::CoreError,
-    header::Header,
+    header::{Header, Headers},
     storage::Storage,
     validator::{BlockValidator, Validator},
 };
 
 pub struct Blockchain<'a> {
     store: Box<dyn Storage>,
-    headers: Vec<&'a Header>,
+    headers: Arc<Mutex<Headers<'a>>>,
     validator: Box<dyn Validator>,
 }
 
@@ -26,7 +28,7 @@ impl<'a> Blockchain<'a> {
     ) -> Result<Self, CoreError> {
         let mut bc = Self {
             store: MemoryStorage::new_boxed(),
-            headers: vec![],
+            headers: Arc::new(Mutex::new(Headers::new())),
             validator,
         };
 
@@ -42,9 +44,11 @@ impl<'a> Blockchain<'a> {
     }
 
     pub fn add_block(&mut self, block: &'a Block) -> Result<(), CoreError> {
-        match self.validator.validate_block(self, block) {
+        let mut headers = self.unlock_headers()?;
+
+        match self.validator.validate_block(&headers, block) {
             Ok(_) => {
-                self.headers.push(block.header());
+                headers.add(block.header());
                 self.store.put(block)
             }
             Err(e) => Err(e),
@@ -55,20 +59,26 @@ impl<'a> Blockchain<'a> {
         self.validator = validator
     }
 
-    pub fn height(&self) -> u64 {
-        (self.headers.len() - 1) as u64
+    pub fn height(&self) -> usize {
+        let headers = self.unlock_headers().unwrap();
+        headers.height()
     }
 
-    pub fn has_block(&self, height: u64) -> bool {
-        height <= self.height()
+    pub fn has_block(&self, height: usize) -> bool {
+        height <= self.height() as usize
     }
 
-    pub fn get_header(&self, index: usize) -> Option<&Header> {
-        self.headers.get(index).copied()
+    pub fn get_header_cloned(&self, index: usize) -> Option<Header> {
+        let headers = self.unlock_headers().unwrap();
+        let header = match headers.get(index) {
+            Some(h) => h.clone(),
+            None => return None,
+        };
+        Some(header)
     }
 
     pub fn get_prev_block_hash(&self, block_number: usize) -> Option<Hash> {
-        self.get_header(block_number).map(|h| h.prev_hash())
+        self.get_header_cloned(block_number).map(|h| h.prev_hash())
     }
 
     // ---
@@ -76,7 +86,8 @@ impl<'a> Blockchain<'a> {
     // ---
 
     fn add_block_without_validation(&mut self, block: &'a Block) -> Result<(), CoreError> {
-        self.headers.push(block.header());
+        let mut headers = self.unlock_headers()?;
+        headers.add(block.header());
 
         info!(
             "adding new block: height: {}, header_hash:{}",
@@ -86,13 +97,22 @@ impl<'a> Blockchain<'a> {
 
         self.store.put(block)
     }
+
+    fn unlock_headers(&self) -> Result<MutexGuard<'_, Headers<'a>>, CoreError> {
+        match self.headers.lock() {
+            Ok(h) => Ok(h),
+            Err(e) => Err(CoreError::Block(
+                "unable to lock headers on blockchain".to_string(),
+            )),
+        }
+    }
 }
 
 impl<'a> Default for Blockchain<'a> {
     fn default() -> Self {
         Self {
             store: MemoryStorage::new_boxed(),
-            headers: vec![],
+            headers: Arc::new(Mutex::new(Headers::new())),
             validator: BlockValidator::new_boxed(),
         }
     }
@@ -144,7 +164,6 @@ mod test {
         assert_eq!("blockchain already contains block", err_msg);
 
         let new_header = random_header(1, genesis_header.hash());
-        let new_block = random_block(&new_header);
 
         let new_signed_block = random_signed_block(&new_header);
 
@@ -159,7 +178,7 @@ mod test {
         assert_eq!(bc.height(), 1);
 
         let new_height = bc.height() + 1;
-        let new_header_2 = random_header(new_height, new_header.hash());
+        let new_header_2 = random_header(new_height as u64, new_header.hash());
         let new_block_2 = random_signed_block(&new_header_2);
 
         assert!(bc.add_block(&new_block_2).is_ok());
@@ -195,7 +214,7 @@ mod test {
 
         let mut blocks: Vec<Block> = vec![];
 
-        for (i, header) in headers.iter().enumerate() {
+        for header in &headers {
             let new_block = random_signed_block(header);
             blocks.push(new_block)
         }
@@ -206,6 +225,6 @@ mod test {
 
         let last_block = blocks.last().unwrap();
 
-        assert!(bc.get_header(last_block.height() as usize).is_some());
+        assert!(bc.get_header_cloned(last_block.height() as usize).is_some());
     }
 }

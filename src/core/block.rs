@@ -107,8 +107,8 @@ impl<'a> Block<'a> {
         self.header.to_bytes()
     }
 
-    pub fn height(&self) -> u64 {
-        self.header.height()
+    pub fn height(&self) -> usize {
+        self.header.height() as usize
     }
 
     // TODO: ENCODE AND DECODE

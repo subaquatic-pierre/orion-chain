@@ -34,8 +34,8 @@ impl Transaction {
         }
     }
 
-    pub fn hash(&self) -> String {
-        self.hash.to_string()
+    pub fn hash(&self) -> Hash {
+        self.hash.clone()
     }
 
     pub fn data_str(&self) -> String {
@@ -351,7 +351,7 @@ mod test {
         let tx_2_hash = tx_2.hash();
         let tx_2_sig = tx_2.signature.unwrap();
 
-        assert_eq!(tx_2_hash.len(), 64);
+        assert_eq!(tx_2_hash.len(), 32);
 
         let tx_2_pub_key = tx_2.signer.unwrap();
 

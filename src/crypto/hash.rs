@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::{Hash as StdHash, Hasher};
 
 use ecdsa::elliptic_curve::rand_core;
 use rand::random;
@@ -26,6 +27,10 @@ impl Hash {
         }
 
         Ok(Self { inner: buf })
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 
     pub fn sha256(data: &[u8]) -> Result<Self, CryptoError> {
@@ -95,6 +100,12 @@ impl PartialEq for Hash {
 }
 
 impl Eq for Hash {}
+
+impl StdHash for Hash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
+    }
+}
 
 #[cfg(test)]
 mod test {

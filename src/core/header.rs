@@ -18,6 +18,37 @@ pub struct Header {
     timestamp: u64,
 }
 
+#[derive(Clone, Debug)]
+pub struct Headers<'a> {
+    headers: Vec<&'a Header>,
+}
+
+impl<'a> Headers<'a> {
+    pub fn new() -> Self {
+        Self { headers: vec![] }
+    }
+
+    pub fn add(&mut self, header: &'a Header) {
+        self.headers.push(header)
+    }
+
+    pub fn get(&self, index: usize) -> Option<&Header> {
+        self.headers.get(index).copied()
+    }
+
+    pub fn last(&self) -> Option<&Header> {
+        self.headers.last().copied()
+    }
+
+    pub fn has_block(&self, height: usize) -> bool {
+        height <= self.height()
+    }
+
+    pub fn height(&self) -> usize {
+        self.headers.len() - 1
+    }
+}
+
 impl Header {
     pub fn height(&self) -> u64 {
         self.height
