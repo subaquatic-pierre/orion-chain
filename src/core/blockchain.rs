@@ -1,6 +1,9 @@
 use log::info;
 
-use crate::core::{hasher::Hasher, storage::MemoryStorage};
+use crate::{
+    core::{hasher::Hasher, storage::MemoryStorage},
+    crypto::hash::Hash,
+};
 
 use super::{
     block::Block,
@@ -62,6 +65,10 @@ impl<'a> Blockchain<'a> {
 
     pub fn get_header(&self, index: usize) -> Option<&Header> {
         self.headers.get(index).copied()
+    }
+
+    pub fn get_prev_block_hash(&self, block_number: usize) -> Option<Hash> {
+        self.get_header(block_number).map(|h| h.prev_hash())
     }
 
     // ---
@@ -139,13 +146,6 @@ mod test {
         let new_header = random_header(1, genesis_header.hash());
         let new_block = random_block(&new_header);
 
-        // let err_msg = match  {
-        //     Ok(_) => "wrong message".to_string(),
-        //     Err(e) => e.to_string(),
-        // };
-
-        // assert!(bc.add_block(&new_block).is_err());
-
         let new_signed_block = random_signed_block(&new_header);
 
         match bc.add_block(&new_signed_block) {
@@ -174,5 +174,38 @@ mod test {
         let mut bc = Blockchain::new_with_genesis(&genesis_block);
 
         assert!(bc.has_block(0));
+    }
+
+    #[test]
+    fn get_header() {
+        let header = random_header(0, random_hash());
+        let genesis_block = random_block(&header);
+        let mut bc = Blockchain::new_with_genesis(&genesis_block);
+
+        let mut headers: Vec<Header> = vec![];
+        let mut prev_header: Header = random_header(1 as u64, genesis_block.hash());
+        headers.push(prev_header.clone());
+
+        for i in 2..50 {
+            let new_header = random_header(i as u64, prev_header.hash());
+            prev_header = new_header.clone();
+
+            headers.push(new_header)
+        }
+
+        let mut blocks: Vec<Block> = vec![];
+
+        for (i, header) in headers.iter().enumerate() {
+            let new_block = random_signed_block(header);
+            blocks.push(new_block)
+        }
+
+        for block in &blocks {
+            assert!(bc.add_block(&block).is_ok());
+        }
+
+        let last_block = blocks.last().unwrap();
+
+        assert!(bc.get_header(last_block.height() as usize).is_some());
     }
 }

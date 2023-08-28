@@ -17,7 +17,7 @@ use super::{
     utils::timestamp,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block<'a> {
     header: &'a Header,
     transactions: Vec<Transaction>,
@@ -61,11 +61,25 @@ impl<'a> Block<'a> {
         Ok(())
     }
 
+    pub fn add_transaction(&mut self, tx: Transaction) -> Result<(), CoreError> {
+        match tx.verify() {
+            Ok(_) => {
+                self.transactions.push(tx);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn verify(&self) -> Result<(), CoreError> {
         if self.signature.is_none() {
             return Err(CoreError::Block(
                 "no signature exists for block".to_string(),
             ));
+        }
+
+        for tx in &self.transactions {
+            tx.verify()?
         }
 
         match &self.signer {
@@ -146,7 +160,10 @@ impl<'a> Hasher<Block<'a>> for Block<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::core::header::random_header;
+    use crate::core::{
+        header::random_header,
+        transaction::{random_signed_tx, random_tx},
+    };
 
     use super::*;
 
@@ -161,6 +178,27 @@ mod test {
 
         assert!(block.signature.is_some());
         assert!(block.signer.is_some());
+    }
+
+    #[test]
+    fn add_transaction() {
+        let header = random_header(0, random_hash());
+        let private_key = PrivateKey::new();
+
+        let mut block = Block::new(&header, vec![]);
+
+        // assert error adding unsigned transactions
+        let tx = random_tx();
+        let msg = "transaction has no signature".to_string();
+        let res = match block.add_transaction(tx) {
+            Ok(_) => "wrong".to_string(),
+            Err(e) => e.to_string(),
+        };
+        assert_eq!(res, msg);
+
+        // assert no error adding signed transaction
+        let tx = random_signed_tx();
+        assert!(block.add_transaction(tx).is_ok());
     }
 
     #[test]
@@ -179,6 +217,33 @@ mod test {
         assert!(block.verify().is_ok());
 
         block.transactions.push(Transaction::new(b"hello world"));
+
+        let msg = "transaction has no signature".to_string();
+
+        let res = match block.verify() {
+            Ok(_) => "wrong".to_string(),
+            Err(e) => e.to_string(),
+        };
+
+        assert_eq!(res, msg);
+    }
+
+    #[test]
+    fn test_verify_block_with_tx() {
+        let header = random_header(0, random_hash());
+        let private_key = PrivateKey::new();
+
+        let mut block = Block::new(&header, vec![]);
+
+        assert!(block.sign(private_key).is_ok());
+
+        let private_key = PrivateKey::new();
+
+        assert!(matches!(block.sign(private_key), Err(_)));
+
+        assert!(block.verify().is_ok());
+
+        block.transactions.push(random_signed_tx());
 
         let msg = "invalid signature".to_string();
 

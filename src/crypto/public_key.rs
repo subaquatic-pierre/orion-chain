@@ -6,7 +6,7 @@ use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding
 
 use super::{address::Address, error::CryptoError, private_key::PrivateKey, signature::Signature};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PublicKey {
     key: VerifyingKey<Secp256k1>,
 }

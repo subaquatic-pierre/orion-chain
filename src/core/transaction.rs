@@ -11,7 +11,7 @@ use super::{
     error::CoreError,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     data_len: u64,
     pub data: Vec<u8>,
