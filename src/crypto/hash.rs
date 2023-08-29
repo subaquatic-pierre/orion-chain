@@ -9,7 +9,7 @@ use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding
 use super::error::CryptoError;
 use super::utils::{random_bytes, random_hash};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, PartialOrd)]
 pub struct Hash {
     inner: [u8; 32],
 }

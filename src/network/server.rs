@@ -8,6 +8,8 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+use log::info;
+
 use crate::{
     core::{
         block::Block,
@@ -40,10 +42,15 @@ impl BlockMiner {
         }
     }
 
-    pub fn mine_block<'a>(&self, header: &'a Header, txs: Vec<Transaction>) -> Block<'a> {
+    pub fn mine_block(&self, header: Header, txs: Vec<Transaction>) -> Block {
         // todo!()
         let block = Block::new(header, txs);
-        println!("create new block in MINER {:#?}", block);
+        info!(
+            "create new block in MINER {:}, num txs: {}, with height: {}",
+            block.hash,
+            block.num_txs(),
+            block.height()
+        );
         // for &tx in txs {
         //     block.add_transaction(tx).unwrap();
         // }
@@ -85,7 +92,6 @@ impl Server<LocalTransport> {
         let tx = self.tx.clone();
         let rx = self.rx.clone();
 
-        let mem_pool = self.mem_pool.clone();
         let miner = self.miner.clone();
 
         let block_time = self.block_time;
@@ -96,44 +102,46 @@ impl Server<LocalTransport> {
                 .expect("unable to initialize transport manager");
         }
 
+        let mem_pool = self.mem_pool.clone();
         // Spawn thread to handle message, main RPC handler thread
         thread::spawn(move || {
             if let Ok(rx) = rx.lock() {
                 for msg in rx.iter() {
-                    println!("{msg:#?}");
+                    info!("MESSAGE: from: {} - to: {}", msg.sender, msg.receiver);
 
                     // check if msg is transaction
                     let tx = Transaction::new(&msg.payload);
                     if let Ok(mut mem_pool) = mem_pool.lock() {
                         // add transaction to mem pool
-                        mem_pool.add(&tx)
+                        mem_pool.add(tx)
 
                         // if ok then broadcast transaction to all peers
                     }
+                }
+            }
+        });
 
-                    // check is server has miner
-                    // miner takes transactions from mem pool on each block duration
-                    if let Ok(mut miner) = miner.lock() {
-                        let now = Instant::now();
-                        let duration_delta = miner.last_block_time + block_time;
-                        // check time delta
-                        if now > duration_delta {
-                            if let Ok(mut pool) = mem_pool.lock() {
-                                let txs = pool.take(2);
+        let mem_pool = self.mem_pool.clone();
+        thread::spawn(move || loop {
+            thread::sleep(block_time);
+            // check is server has miner
+            // miner takes transactions from mem pool on each block duration
+            if let Ok(mut miner) = miner.lock() {
+                if let Ok(mut pool) = mem_pool.lock() {
+                    let txs = pool.take(2);
 
-                                let header = random_header(1, random_hash());
+                    let header = random_header(1, random_hash());
 
-                                // get block from miner
-                                miner.mine_block(&header, txs);
+                    if !txs.is_empty() {
+                        // get block from miner
+                        miner.mine_block(header, txs);
 
-                                // add block to blockchain
+                        // add block to blockchain
 
-                                // broadcast added block
+                        // broadcast added block
 
-                                // update last block time
-                                miner.last_block_time = Instant::now();
-                            }
-                        }
+                        // update last block time
+                        miner.last_block_time = Instant::now();
                     }
                 }
             }

@@ -5,12 +5,11 @@ use super::{
     blockchain::Blockchain,
     error::CoreError,
     hasher::Hasher,
-    header::{Header, Headers},
+    header::{Header, HeaderManager},
 };
 
 pub trait Validator {
-    fn validate_block(&self, headers: &MutexGuard<Headers>, block: &Block)
-        -> Result<(), CoreError>;
+    fn validate_block(&self, headers: &HeaderManager, block: &Block) -> Result<(), CoreError>;
 }
 
 pub struct BlockValidator {}
@@ -26,11 +25,7 @@ impl BlockValidator {
 }
 
 impl Validator for BlockValidator {
-    fn validate_block(
-        &self,
-        headers: &MutexGuard<Headers>,
-        block: &Block,
-    ) -> Result<(), CoreError> {
+    fn validate_block(&self, headers: &HeaderManager, block: &Block) -> Result<(), CoreError> {
         if headers.has_block(block.height()) {
             return Err(CoreError::Block(
                 "blockchain already contains block".to_string(),

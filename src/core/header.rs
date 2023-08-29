@@ -26,25 +26,33 @@ pub struct Header {
 // }
 
 #[derive(Clone, Debug)]
-pub struct Headers<'a> {
-    headers: Vec<&'a Header>,
+pub struct HeaderManager {
+    headers: Vec<Header>,
 }
 
-impl<'a> Headers<'a> {
+impl HeaderManager {
     pub fn new() -> Self {
         Self { headers: vec![] }
     }
 
-    pub fn add(&mut self, header: &'a Header) {
+    pub fn add(&mut self, header: Header) {
         self.headers.push(header)
     }
 
     pub fn get(&self, index: usize) -> Option<&Header> {
-        self.headers.get(index).copied()
+        if let Some(h) = self.headers.get(index) {
+            Some(h)
+        } else {
+            None
+        }
     }
 
     pub fn last(&self) -> Option<&Header> {
-        self.headers.last().copied()
+        if let Some(h) = self.headers.last() {
+            Some(h)
+        } else {
+            None
+        }
     }
 
     pub fn has_block(&self, height: usize) -> bool {

@@ -10,25 +10,25 @@ use crate::{
 use super::{
     block::Block,
     error::CoreError,
-    header::{Header, Headers},
+    header::{Header, HeaderManager},
     storage::Storage,
     validator::{BlockValidator, Validator},
 };
 
-pub struct Blockchain<'a> {
+pub struct Blockchain {
     store: Box<dyn Storage>,
-    headers: Arc<Mutex<Headers<'a>>>,
+    header_manager: HeaderManager,
     validator: Box<dyn Validator>,
 }
 
-impl<'a> Blockchain<'a> {
+impl Blockchain {
     pub fn new(
-        genesis_block: &'a Block,
+        genesis_block: Block,
         validator: Box<impl Validator + 'static>,
     ) -> Result<Self, CoreError> {
         let mut bc = Self {
             store: MemoryStorage::new_boxed(),
-            headers: Arc::new(Mutex::new(Headers::new())),
+            header_manager: HeaderManager::new(),
             validator,
         };
 
@@ -37,19 +37,19 @@ impl<'a> Blockchain<'a> {
         Ok(bc)
     }
 
-    pub fn new_with_genesis(genesis_block: &'a Block) -> Self {
+    pub fn new_with_genesis(genesis_block: Block) -> Self {
         let mut bc = Self::default();
         bc.add_block_without_validation(genesis_block).unwrap();
         bc
     }
 
-    pub fn add_block(&mut self, block: &'a Block) -> Result<(), CoreError> {
-        let mut headers = self.unlock_headers()?;
+    pub fn add_block(&mut self, block: Block) -> Result<(), CoreError> {
+        let headers = &mut self.header_manager;
 
-        match self.validator.validate_block(&headers, block) {
+        match self.validator.validate_block(headers, &block) {
             Ok(_) => {
-                headers.add(block.header());
-                self.store.put(block)
+                headers.add(block.header().to_owned());
+                self.store.put(&block)
             }
             Err(e) => Err(e),
         }
@@ -60,7 +60,7 @@ impl<'a> Blockchain<'a> {
     }
 
     pub fn height(&self) -> usize {
-        let headers = self.unlock_headers().unwrap();
+        let headers = &self.header_manager;
         headers.height()
     }
 
@@ -69,7 +69,7 @@ impl<'a> Blockchain<'a> {
     }
 
     pub fn get_header_cloned(&self, index: usize) -> Option<Header> {
-        let headers = self.unlock_headers().unwrap();
+        let headers = &self.header_manager;
         let header = match headers.get(index) {
             Some(h) => h.clone(),
             None => return None,
@@ -85,9 +85,9 @@ impl<'a> Blockchain<'a> {
     // Private Methods
     // ---
 
-    fn add_block_without_validation(&mut self, block: &'a Block) -> Result<(), CoreError> {
-        let mut headers = self.unlock_headers()?;
-        headers.add(block.header());
+    fn add_block_without_validation(&mut self, block: Block) -> Result<(), CoreError> {
+        let headers = &mut self.header_manager;
+        headers.add(block.header().to_owned());
 
         info!(
             "adding new block: height: {}, header_hash:{}",
@@ -95,24 +95,15 @@ impl<'a> Blockchain<'a> {
             block.header().hash()
         );
 
-        self.store.put(block)
-    }
-
-    fn unlock_headers(&self) -> Result<MutexGuard<'_, Headers<'a>>, CoreError> {
-        match self.headers.lock() {
-            Ok(h) => Ok(h),
-            Err(e) => Err(CoreError::Block(
-                "unable to lock headers on blockchain".to_string(),
-            )),
-        }
+        self.store.put(&block)
     }
 }
 
-impl<'a> Default for Blockchain<'a> {
+impl Default for Blockchain {
     fn default() -> Self {
         Self {
             store: MemoryStorage::new_boxed(),
-            headers: Arc::new(Mutex::new(Headers::new())),
+            header_manager: HeaderManager::new(),
             validator: BlockValidator::new_boxed(),
         }
     }
@@ -142,9 +133,9 @@ mod test {
     fn test_new_blockchain() {
         let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
         let header = random_header(0, genesis_hash);
-        let genesis_block = random_block(&header);
+        let genesis_block = random_block(header);
         let validator = BlockValidator::new_boxed();
-        let mut bc = Blockchain::new(&genesis_block, validator);
+        let mut bc = Blockchain::new(genesis_block, validator);
 
         assert!(bc.is_ok())
     }
@@ -153,11 +144,11 @@ mod test {
     fn test_add_block() {
         let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
         let genesis_header = random_header(0, genesis_hash);
-        let genesis_block = random_block(&genesis_header);
-        let mut bc = Blockchain::new_with_genesis(&genesis_block);
+        let genesis_block = random_block(genesis_header.clone());
+        let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
 
         // check cannot re-add existing block
-        let err_msg = match bc.add_block(&genesis_block) {
+        let err_msg = match bc.add_block(genesis_block.clone()) {
             Ok(_) => "wrong message".to_string(),
             Err(e) => e.to_string(),
         };
@@ -165,23 +156,23 @@ mod test {
 
         let new_header = random_header(1, genesis_header.hash());
 
-        let new_signed_block = random_signed_block(&new_header);
+        let new_signed_block = random_signed_block(new_header.clone());
 
-        match bc.add_block(&new_signed_block) {
+        match bc.add_block(new_signed_block.clone()) {
             Ok(_) => {}
             Err(e) => println!("{e}"),
         }
 
         // fails to re add same signed block
-        assert!(bc.add_block(&new_signed_block).is_err());
+        assert!(bc.add_block(new_signed_block).is_err());
 
         assert_eq!(bc.height(), 1);
 
         let new_height = bc.height() + 1;
         let new_header_2 = random_header(new_height as u64, new_header.hash());
-        let new_block_2 = random_signed_block(&new_header_2);
+        let new_block_2 = random_signed_block(new_header_2);
 
-        assert!(bc.add_block(&new_block_2).is_ok());
+        assert!(bc.add_block(new_block_2).is_ok());
 
         assert_eq!(bc.height(), 2);
     }
@@ -189,8 +180,8 @@ mod test {
     #[test]
     fn test_has_block() {
         let header = random_header(0, random_hash());
-        let genesis_block = random_block(&header);
-        let mut bc = Blockchain::new_with_genesis(&genesis_block);
+        let genesis_block = random_block(header);
+        let mut bc = Blockchain::new_with_genesis(genesis_block);
 
         assert!(bc.has_block(0));
     }
@@ -198,8 +189,8 @@ mod test {
     #[test]
     fn get_header() {
         let header = random_header(0, random_hash());
-        let genesis_block = random_block(&header);
-        let mut bc = Blockchain::new_with_genesis(&genesis_block);
+        let genesis_block = random_block(header);
+        let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
 
         let mut headers: Vec<Header> = vec![];
         let mut prev_header: Header = random_header(1 as u64, genesis_block.hash());
@@ -215,12 +206,12 @@ mod test {
         let mut blocks: Vec<Block> = vec![];
 
         for header in &headers {
-            let new_block = random_signed_block(header);
+            let new_block = random_signed_block(header.to_owned());
             blocks.push(new_block)
         }
 
         for block in &blocks {
-            assert!(bc.add_block(&block).is_ok());
+            assert!(bc.add_block(block.to_owned()).is_ok());
         }
 
         let last_block = blocks.last().unwrap();

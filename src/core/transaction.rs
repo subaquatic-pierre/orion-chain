@@ -11,11 +11,11 @@ use super::{
     error::CoreError,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     data_len: u64,
     pub data: Vec<u8>,
-    hash: Hash,
+    pub hash: Hash,
     pub signature: Option<Signature>,
     pub signer: Option<PublicKey>,
 }

@@ -18,29 +18,34 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Block<'a> {
-    header: &'a Header,
+pub struct Block {
+    header: Header,
     transactions: Vec<Transaction>,
     signer: Option<PublicKey>,
     signature: Option<Signature>,
 
     // cached hash
-    hash: Option<Hash>,
+    pub hash: Hash,
 }
 
-impl<'a> Block<'a> {
-    pub fn new(header: &'a Header, txs: Vec<Transaction>) -> Self {
+impl Block {
+    pub fn new(header: Header, txs: Vec<Transaction>) -> Self {
+        let hash = Self::generate_block_hash(&txs);
         Self {
             header,
             transactions: txs,
             signer: None,
             signature: None,
-            hash: None,
+            hash,
         }
     }
 
     pub fn header(&self) -> &Header {
-        self.header
+        &self.header
+    }
+
+    pub fn num_txs(&self) -> usize {
+        self.transactions.len()
     }
 
     pub fn sign(&mut self, private_key: PrivateKey) -> Result<(), CoreError> {
@@ -93,14 +98,9 @@ impl<'a> Block<'a> {
         }
     }
 
-    pub fn hash(&mut self) -> Hash {
-        let hashable_bytes = &self.hashable_data();
-
-        if self.hash.is_none() {
-            self.hash = Some(Hash::sha256(hashable_bytes).unwrap());
-        }
-
-        self.hash.clone().unwrap()
+    pub fn hash(&mut self) -> &Hash {
+        // let hashable_bytes = &self.hashable_data();
+        &self.hash
     }
 
     pub fn header_data(&self) -> Vec<u8> {
@@ -144,15 +144,53 @@ impl<'a> Block<'a> {
         data.extend_from_slice(&self.txs_bytes());
         data
     }
-}
 
-impl<'a> ByteEncoding for Block<'a> {
-    fn to_bytes(&self) -> Vec<u8> {
-        todo!()
+    // ---
+    // Static methods
+    // ---
+    // TODO: implement merkle root
+    pub fn generate_block_hash(txs: &Vec<Transaction>) -> Hash {
+        let mut hash: Hash = match txs.len() {
+            0 => Hash::sha256(&[]).unwrap(),
+            2 => {
+                let mut buf: Vec<u8> = vec![];
+                buf.extend_from_slice(&txs[0].hash.to_bytes());
+                buf.extend_from_slice(&txs[1].hash.to_bytes());
+                return Hash::sha256(&buf).unwrap();
+            }
+            _ => return Hash::sha256(&txs[0].hash.to_bytes()).unwrap(),
+        };
+
+        for (i, tx) in txs.iter().skip(2).enumerate() {
+            let prev_tx = &txs[i - 1];
+            let mut buf: Vec<u8> = vec![];
+            buf.extend_from_slice(&hash.to_bytes());
+            buf.extend_from_slice(&prev_tx.hash.to_bytes());
+            buf.extend_from_slice(&tx.hash.to_bytes());
+            hash = Hash::sha256(&buf).unwrap();
+        }
+
+        Hash::new(&hash.to_bytes()).unwrap()
     }
 }
 
-impl<'a> Hasher<Block<'a>> for Block<'a> {
+impl ByteEncoding for Block {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![]
+    }
+}
+
+impl ByteDecoding for Block {
+    type Target = Block;
+    type Error = CoreError;
+
+    fn from_bytes(data: &[u8]) -> Result<Self::Target, Self::Error> {
+        let header = random_header(1, random_hash());
+        Ok(random_block(header))
+    }
+}
+
+impl Hasher<Block> for Block {
     fn hash(&self) -> Hash {
         Hash::sha256(&self.hashable_data()).unwrap()
     }
@@ -172,7 +210,7 @@ mod test {
         let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
-        let mut block = Block::new(&header, vec![]);
+        let mut block = Block::new(header, vec![]);
 
         assert!(block.sign(private_key).is_ok());
 
@@ -183,9 +221,9 @@ mod test {
     #[test]
     fn add_transaction() {
         let header = random_header(0, random_hash());
-        let private_key = PrivateKey::new();
+        // let private_key = PrivateKey::new();
 
-        let mut block = Block::new(&header, vec![]);
+        let mut block = Block::new(header, vec![]);
 
         // assert error adding unsigned transactions
         let tx = random_tx();
@@ -206,7 +244,7 @@ mod test {
         let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
-        let mut block = Block::new(&header, vec![]);
+        let mut block = Block::new(header, vec![]);
 
         assert!(block.sign(private_key).is_ok());
 
@@ -233,7 +271,7 @@ mod test {
         let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
-        let mut block = Block::new(&header, vec![]);
+        let mut block = Block::new(header, vec![]);
 
         assert!(block.sign(private_key).is_ok());
 
@@ -256,11 +294,11 @@ mod test {
     }
 }
 
-pub fn random_block(header: &Header) -> Block {
-    Block::new(&header, vec![])
+pub fn random_block(header: Header) -> Block {
+    Block::new(header, vec![])
 }
 
-pub fn random_signed_block(header: &Header) -> Block {
+pub fn random_signed_block(header: Header) -> Block {
     let mut block = Block::new(header, vec![]);
     let pvt_key = PrivateKey::new();
 

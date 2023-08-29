@@ -39,6 +39,7 @@ fn setup() {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    setup();
     let ts1 = LocalTransport::new("local");
     let ts2 = LocalTransport::new("custom");
     let ts3 = LocalTransport::new("remote");
@@ -77,15 +78,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     _ => "local".to_string(),
                 };
 
-                let random_number: u8 = rand::thread_rng().gen();
-                let string = format!("hello {random_number}");
-                match ts_manager.send_msg(addr, "remote".to_string(), string.as_bytes().to_vec()) {
-                    Ok(_) => (),
-                    Err(e) => warn!("{e}"),
-                }
-                // .expect("unable to send message");
+                let random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+                ts_manager
+                    .send_msg(addr, "remote".to_string(), random_number)
+                    .ok();
             }
-            thread::sleep(time::Duration::from_secs(3));
+            thread::sleep(time::Duration::from_secs(1));
 
             if let Ok(ticker) = ticker.lock().as_mut() {
                 ticker.inc()

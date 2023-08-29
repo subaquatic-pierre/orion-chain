@@ -5,6 +5,7 @@ pub enum NetworkError {
     Connect(String),
     NotFound(String),
     Message(String),
+    Decoding(String),
 }
 
 impl Error for NetworkError {}
@@ -15,6 +16,7 @@ impl Display for NetworkError {
             Self::Connect(msg) => write!(f, "{msg}"),
             Self::NotFound(msg) => write!(f, "{msg}"),
             Self::Message(msg) => write!(f, "{msg}"),
+            Self::Decoding(msg) => write!(f, "{msg}"),
             _ => write!(f, "Unknown network error"),
         }
     }
