@@ -9,7 +9,7 @@ use crate::crypto::{
 };
 
 use super::{
-    encoding::{ByteDecoding, ByteEncoding},
+    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
     error::CoreError,
     hasher::Hasher,
     header::{random_header, Header},
@@ -20,9 +20,9 @@ use super::{
 #[derive(Debug, Clone)]
 pub struct Block {
     header: Header,
-    transactions: Vec<Transaction>,
     signer: Option<PublicKey>,
     signature: Option<Signature>,
+    transactions: Vec<Transaction>,
 
     // cached hash
     pub hash: Hash,
@@ -176,7 +176,30 @@ impl Block {
 
 impl ByteEncoding for Block {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![]
+        let mut buf: Vec<u8> = vec![];
+
+        let header_bytes = self.header.to_bytes();
+        buf.extend_from_slice(&header_bytes);
+
+        if let Some(signature) = &self.signature {
+            buf.extend_from_slice(&[1_u8]);
+            buf.extend_from_slice(&signature.to_bytes());
+        } else {
+            buf.extend_from_slice(&[0_u8]);
+        };
+
+        if let Some(signer) = &self.signer {
+            buf.extend_from_slice(&[1_u8]);
+            buf.extend_from_slice(&signer.to_bytes());
+        } else {
+            buf.extend_from_slice(&[0_u8]);
+        };
+
+        for tx in &self.transactions {
+            buf.extend_from_slice(&tx.to_bytes());
+        }
+
+        buf
     }
 }
 
@@ -185,11 +208,73 @@ impl ByteDecoding for Block {
     type Error = CoreError;
 
     fn from_bytes(data: &[u8]) -> Result<Self::Target, Self::Error> {
-        let header = random_header(1, random_hash());
-        Ok(random_block(header))
+        let mut offset = 0;
+        let data_len = data.len();
+        // let header = random_header(1, random_hash());
+
+        let header = Header::from_bytes(data)?;
+        offset += header.to_bytes().len();
+
+        let has_sig = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
+        offset += 1;
+
+        let mut signature = None;
+        if has_sig > 0 {
+            signature = Some(Signature::from_bytes(&data[offset..offset + 64])?);
+            offset += 64;
+        }
+
+        let has_signer = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
+        offset += 1;
+
+        let mut signer = None;
+        if has_signer > 0 {
+            signer = Some(PublicKey::from_bytes(&data[offset..offset + 33])?);
+            offset += 33;
+        }
+
+        // get transaction from rest of bytes
+        let mut txs: Vec<Transaction> = vec![];
+        while offset < data_len {
+            let tx = Transaction::from_bytes(&data[offset..])?;
+            offset += tx.to_bytes().len();
+            txs.push(tx);
+        }
+
+        let hash = Self::generate_block_hash(&txs);
+        Ok(Self {
+            header,
+            transactions: txs,
+            signer,
+            signature,
+            hash,
+        })
     }
 }
 
+impl HexEncoding for Block {
+    fn to_hex(&self) -> String {
+        let bytes = &self.to_bytes();
+        hex::encode(bytes)
+    }
+}
+
+impl HexDecoding for Block {
+    type Target = Self;
+    type Error = CoreError;
+
+    fn from_hex(data: &str) -> Result<Block, CoreError> {
+        let bytes = hex::decode(data);
+        match bytes {
+            Ok(bytes) => Self::from_bytes(&bytes),
+            Err(e) => Err(CoreError::Parsing(format!(
+                "unable to parse hex from bytes {e}"
+            ))),
+        }
+    }
+}
+
+// TODO: Not using Hasher trait
 impl Hasher<Block> for Block {
     fn hash(&self) -> Hash {
         Hash::sha256(&self.hashable_data()).unwrap()
@@ -291,6 +376,19 @@ mod test {
         };
 
         assert_eq!(res, msg);
+    }
+
+    #[test]
+    fn test_block_byte_parsing() {
+        let header = random_header(1, random_hash());
+        let block = random_block(header);
+
+        let block_bytes = block.to_bytes();
+
+        assert!(Block::from_bytes(&block_bytes).is_ok());
+
+        let decoded_block = Block::from_bytes(&block_bytes).unwrap();
+        assert_eq!(format!("{:?}", block), format!("{:?}", decoded_block));
     }
 }
 

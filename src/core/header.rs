@@ -74,6 +74,7 @@ impl Header {
     }
 }
 
+// TODO: Not using Hasher trait
 impl Hasher<Header> for Header {
     fn hash(&self) -> Hash {
         Hash::sha256(&self.to_bytes()).unwrap()
@@ -106,7 +107,7 @@ impl ByteDecoding for Header {
         let height = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
         offset += 8;
 
-        let timestamp = u64::from_be_bytes(data[offset..].try_into().unwrap());
+        let timestamp = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
 
         Ok(Self {
             version,

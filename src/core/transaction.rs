@@ -126,9 +126,9 @@ impl ByteDecoding for Transaction {
     type Error = CoreError;
 
     fn from_bytes(data: &[u8]) -> Result<Transaction, CoreError> {
-        if data.len() < 64 {
+        if data.len() < 8 {
             return Err(CoreError::Transaction(
-                "incorrectly formatted bytes".to_string(),
+                "incorrectly formatted bytes, no data length in bytes".to_string(),
             ));
         }
 
@@ -194,7 +194,7 @@ impl ByteDecoding for Transaction {
         let signer: Option<PublicKey> = if has_pub_key_byte == 0 {
             None
         } else {
-            match PublicKey::from_bytes(&data[offset..]) {
+            match PublicKey::from_bytes(&data[offset..offset + 33]) {
                 Ok(key) => Some(key),
                 Err(e) => {
                     return Err(CoreError::Transaction(format!(
