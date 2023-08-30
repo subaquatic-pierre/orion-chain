@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 use crypto::private_key::PrivateKey;
 use log::{info, trace, warn};
 use rand::Rng;
