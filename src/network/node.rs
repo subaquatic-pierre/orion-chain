@@ -12,7 +12,8 @@ use log::info;
 
 use crate::{
     core::{
-        block::Block,
+        block::{random_block, Block},
+        blockchain::Blockchain,
         header::{random_header, Header},
         transaction::Transaction,
     },
@@ -74,6 +75,7 @@ where
     block_time: time::Duration,
     mem_pool: Arc<Mutex<TxPool>>,
     miner: Arc<Mutex<BlockMiner>>,
+    pub chain: Arc<Blockchain>,
 }
 
 impl ChainNode<LocalTransport> {
@@ -82,6 +84,8 @@ impl ChainNode<LocalTransport> {
         let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
         let ts_manager = ArcMut::new(config.ts_manager);
 
+        let block = random_block(random_header(0, random_hash()));
+
         Self {
             transport_manager: ts_manager,
             rx,
@@ -89,6 +93,7 @@ impl ChainNode<LocalTransport> {
             block_time: config.block_time,
             mem_pool: Arc::new(Mutex::new(TxPool::new())),
             miner: Arc::new(Mutex::new(BlockMiner::new())),
+            chain: Arc::new(Blockchain::new_with_genesis(block)),
         }
     }
 

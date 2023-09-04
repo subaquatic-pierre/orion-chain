@@ -21,9 +21,10 @@ use network::{
     transport::{ArcMut, LocalTransport, Transport, TransportManager},
 };
 
-use crate::network::error::NetworkError;
+pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
+pub type Result<T> = std::result::Result<T, GenericError>;
 
-pub fn build_full_node() -> Result<ChainNode<LocalTransport>, Box<dyn Error>> {
+pub fn build_full_node() -> Result<ChainNode<LocalTransport>> {
     let ts1 = LocalTransport::new("local");
     let ts2 = LocalTransport::new("custom");
     let ts3 = LocalTransport::new("remote");

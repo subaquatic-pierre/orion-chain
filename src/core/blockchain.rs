@@ -12,22 +12,19 @@ use super::{
     error::CoreError,
     header::{Header, HeaderManager},
     storage::Storage,
-    validator::{BlockValidator, Validator},
+    validator::BlockValidator,
 };
 
 pub struct Blockchain {
-    store: Box<dyn Storage>,
+    store: MemoryStorage,
     header_manager: HeaderManager,
-    validator: Box<dyn Validator>,
+    validator: BlockValidator,
 }
 
 impl Blockchain {
-    pub fn new(
-        genesis_block: Block,
-        validator: Box<impl Validator + 'static>,
-    ) -> Result<Self, CoreError> {
+    pub fn new(genesis_block: Block, validator: BlockValidator) -> Result<Self, CoreError> {
         let mut bc = Self {
-            store: MemoryStorage::new_boxed(),
+            store: MemoryStorage::new(),
             header_manager: HeaderManager::new(),
             validator,
         };
@@ -55,7 +52,7 @@ impl Blockchain {
         }
     }
 
-    pub fn set_validator(&mut self, validator: Box<impl Validator + 'static>) {
+    pub fn set_validator(&mut self, validator: BlockValidator) {
         self.validator = validator
     }
 
@@ -102,9 +99,9 @@ impl Blockchain {
 impl Default for Blockchain {
     fn default() -> Self {
         Self {
-            store: MemoryStorage::new_boxed(),
+            store: MemoryStorage::new(),
             header_manager: HeaderManager::new(),
-            validator: BlockValidator::new_boxed(),
+            validator: BlockValidator::new(),
         }
     }
 }
