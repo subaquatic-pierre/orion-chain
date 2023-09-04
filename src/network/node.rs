@@ -20,11 +20,15 @@ use crate::{
 };
 
 use super::{
-    transport::{ArcMut, HttpTransport, LocalTransport, Transport, TransportManager, RPC},
+    error::NetworkError,
+    rpc::RPC,
+    transport::{
+        ArcMut, HttpTransport, LocalTransport, NetAddr, Payload, Transport, TransportManager,
+    },
     tx_pool::TxPool,
 };
 
-pub struct ServerConfig<T>
+pub struct NodeConfig<T>
 where
     T: Transport,
 {
@@ -35,6 +39,7 @@ where
 pub struct BlockMiner {
     pub last_block_time: Instant,
 }
+
 impl BlockMiner {
     pub fn new() -> Self {
         Self {
@@ -59,11 +64,11 @@ impl BlockMiner {
     }
 }
 
-pub struct Server<T>
+pub struct ChainNode<T>
 where
     T: Transport,
 {
-    pub transport_manager: ArcMut<TransportManager<T>>,
+    transport_manager: ArcMut<TransportManager<T>>,
     rx: ArcMut<Receiver<RPC>>,
     tx: ArcMut<Sender<RPC>>,
     block_time: time::Duration,
@@ -71,8 +76,8 @@ where
     miner: Arc<Mutex<BlockMiner>>,
 }
 
-impl Server<LocalTransport> {
-    pub fn new(config: ServerConfig<LocalTransport>) -> Self {
+impl ChainNode<LocalTransport> {
+    pub fn new(config: NodeConfig<LocalTransport>) -> Self {
         let (tx, rx) = channel::<RPC>();
         let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
         let ts_manager = ArcMut::new(config.ts_manager);
@@ -85,6 +90,19 @@ impl Server<LocalTransport> {
             mem_pool: Arc::new(Mutex::new(TxPool::new())),
             miner: Arc::new(Mutex::new(BlockMiner::new())),
         }
+    }
+
+    pub fn send_msg(
+        &self,
+        from_addr: NetAddr,
+        to_addr: NetAddr,
+        payload: Payload,
+    ) -> Result<(), NetworkError> {
+        if let Ok(ts_manager) = self.transport_manager.lock() {
+            ts_manager.send_msg(from_addr, to_addr, payload)?
+        }
+
+        Ok(())
     }
 
     pub fn start(&mut self) {

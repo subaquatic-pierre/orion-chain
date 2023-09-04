@@ -9,6 +9,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
+use super::rpc::RPC;
+
 pub type NetAddr = String;
 pub type Payload = Vec<u8>;
 
@@ -29,13 +31,6 @@ impl<T> Deref for ArcMut<T> {
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct RPC {
-    pub sender: NetAddr,
-    pub receiver: NetAddr,
-    pub payload: Payload,
 }
 
 pub trait Transport {
@@ -90,8 +85,8 @@ impl Transport for LocalTransport {
 
     fn send_msg(&self, from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
         let rpc = RPC {
-            sender: from_addr.to_string(),
-            receiver: self.address().to_string(),
+            sender: from_addr,
+            receiver: self.address(),
             payload,
         };
 

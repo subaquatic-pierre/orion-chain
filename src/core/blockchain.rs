@@ -124,7 +124,7 @@ mod test {
             validator,
         },
         crypto::{hash::Hash, utils::random_hash},
-        setup,
+        logger_init,
     };
 
     use super::*;
