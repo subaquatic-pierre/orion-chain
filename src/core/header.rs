@@ -6,7 +6,7 @@ use super::{
     error::CoreError,
     hasher::Hasher,
     transaction::Transaction,
-    utils::timestamp,
+    util::timestamp,
 };
 
 #[derive(Clone, Debug)]

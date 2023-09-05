@@ -1,5 +1,7 @@
 #![allow(clippy::needless_range_loop)]
+
 use crypto::private_key::PrivateKey;
+use crypto::utils::random_hash;
 use log::{info, trace, warn};
 use rand::Rng;
 use std::thread::JoinHandle;
@@ -15,6 +17,8 @@ use std::{
     sync::{Arc, Once},
     thread, time,
 };
+
+use crate::core::{block::random_block, blockchain::Blockchain, header::random_header};
 
 use network::{
     node::{ChainNode, NodeConfig},
@@ -36,11 +40,14 @@ pub fn build_full_node() -> Result<ChainNode<LocalTransport>> {
 
     let config = NodeConfig {
         ts_manager,
-        block_time: time::Duration::from_secs(20),
+        block_time: time::Duration::from_secs(5),
         private_key: Some(PrivateKey::new()),
     };
 
-    Ok(ChainNode::new(config))
+    let block = random_block(random_header(0, random_hash()));
+    let chain = Blockchain::new_with_genesis(block);
+
+    Ok(ChainNode::new(config, chain))
 }
 
 pub fn send_tx_loop(mut server: ChainNode<LocalTransport>) -> JoinHandle<()> {

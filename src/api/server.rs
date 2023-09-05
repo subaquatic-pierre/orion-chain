@@ -9,6 +9,7 @@ use hyper::{body::Incoming as IncomingBody, header, Method, Request, Response, S
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, MutexGuard};
 
+use crate::api::util::TokioIo;
 use crate::core::blockchain::Blockchain;
 use crate::network::node::ChainNode;
 use crate::network::transport::{ArcMut, LocalTransport};
@@ -52,7 +53,7 @@ pub static URL: &str = "http://127.0.0.1:1337/json_api";
 // }
 
 pub async fn api_post_response(
-    chain: &Blockchain,
+    node: &Arc<Mutex<ChainNode<LocalTransport>>>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -61,11 +62,41 @@ pub async fn api_post_response(
     let mut data: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
     // Change the JSON...
 
-    let block = chain.get_header_cloned(0).unwrap();
+    let block = node.lock().await.chain.get_header_cloned(0).unwrap();
     let block_str = format!("{:?}", block);
 
     data["test"] = serde_json::Value::from("test_value");
     data["block"] = serde_json::Value::from(block_str);
+    // And respond with the new JSON.
+    let json = serde_json::to_string(&data)?;
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(full(json))?;
+    Ok(response)
+}
+pub async fn tx_response(
+    node: &Arc<Mutex<ChainNode<LocalTransport>>>,
+    req: Request<IncomingBody>,
+) -> Result<Response<BoxBody>> {
+    // Aggregate the body...
+    let whole_body = req.collect().await?.aggregate();
+    // Decode as JSON...
+    let mut data: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
+    // Change the JSON...
+
+    // let block = chain.get_header_cloned(0).unwrap();
+    // let block_str = format!("{:?}", block);
+
+    let random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+
+    let node = node.lock().await;
+
+    node.send_msg("local".to_string(), "remote".to_string(), random_number)
+        .ok();
+
+    data["test"] = serde_json::Value::from("test_value");
+    // data["block"] = serde_json::Value::from(block_str);
     // And respond with the new JSON.
     let json = serde_json::to_string(&data)?;
     let response = Response::builder()
@@ -90,22 +121,24 @@ pub async fn api_get_response() -> Result<Response<BoxBody>> {
     Ok(res)
 }
 
-pub struct Router {
+pub struct HttpRouter {
     node: Arc<Mutex<ChainNode<LocalTransport>>>,
 }
 
-impl Router {
+impl HttpRouter {
     pub fn new(node: Arc<Mutex<ChainNode<LocalTransport>>>) -> Self {
         Self { node }
     }
 
     pub async fn route_handler(&self, req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
-        let chain = &self.node.lock().await.chain;
+        let node = &self.node.clone();
+        // let chain = &self.node.lock().await.chain;
         match (req.method(), req.uri().path()) {
             (&Method::GET, "/") | (&Method::GET, "/index.html") => Ok(Response::new(full(INDEX))),
             // (&Method::GET, "/test.html") => client_request_response().await,
-            (&Method::POST, "/json_api") => api_post_response(chain, req).await,
+            (&Method::POST, "/json_api") => api_post_response(node, req).await,
             (&Method::GET, "/json_api") => api_get_response().await,
+            (&Method::POST, "/tx") => tx_response(node, req).await,
             _ => {
                 // Return 404 not found response.
                 Ok(Response::builder()
@@ -113,6 +146,42 @@ impl Router {
                     .body(full(NOTFOUND))
                     .unwrap())
             }
+        }
+    }
+}
+
+pub struct ApiServer {
+    node: Arc<Mutex<ChainNode<LocalTransport>>>,
+    router: Arc<Mutex<HttpRouter>>,
+}
+
+impl ApiServer {
+    pub fn new(node: Arc<Mutex<ChainNode<LocalTransport>>>) -> Self {
+        let router = Arc::new(Mutex::new(HttpRouter::new(node.clone())));
+
+        Self { node, router }
+    }
+
+    pub async fn start(&self) -> Result<()> {
+        let addr: SocketAddr = "127.0.0.1:1337".parse().unwrap();
+
+        let listener = TcpListener::bind(&addr).await?;
+        println!("Listening on http://{}", addr);
+
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let io = TokioIo::new(stream);
+
+            let router = self.router.clone();
+
+            tokio::task::spawn(async move {
+                let router = router.lock().await;
+                let service = service_fn(|req| router.route_handler(req));
+
+                if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                    println!("Failed to serve connection: {:?}", err);
+                }
+            });
         }
     }
 }

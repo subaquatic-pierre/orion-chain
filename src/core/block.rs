@@ -14,7 +14,7 @@ use super::{
     hasher::Hasher,
     header::{random_header, Header},
     transaction::Transaction,
-    utils::timestamp,
+    util::timestamp,
 };
 
 #[derive(Debug, Clone)]

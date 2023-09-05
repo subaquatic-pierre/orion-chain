@@ -9,6 +9,7 @@ use std::{
 };
 
 use log::info;
+use serde::de::Error;
 
 use crate::{
     core::{
@@ -18,6 +19,7 @@ use crate::{
         transaction::Transaction,
     },
     crypto::{private_key::PrivateKey, utils::random_hash},
+    GenericError,
 };
 
 use super::{
@@ -79,12 +81,10 @@ where
 }
 
 impl ChainNode<LocalTransport> {
-    pub fn new(config: NodeConfig<LocalTransport>) -> Self {
+    pub fn new(config: NodeConfig<LocalTransport>, chain: Blockchain) -> Self {
         let (tx, rx) = channel::<RPC>();
         let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
         let ts_manager = ArcMut::new(config.ts_manager);
-
-        let block = random_block(random_header(0, random_hash()));
 
         Self {
             transport_manager: ts_manager,
@@ -93,7 +93,7 @@ impl ChainNode<LocalTransport> {
             block_time: config.block_time,
             mem_pool: Arc::new(Mutex::new(TxPool::new())),
             miner: Arc::new(Mutex::new(BlockMiner::new())),
-            chain: Arc::new(Blockchain::new_with_genesis(block)),
+            chain: Arc::new(chain),
         }
     }
 
@@ -110,7 +110,7 @@ impl ChainNode<LocalTransport> {
         Ok(())
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> Result<(), GenericError> {
         let ts_manager = self.transport_manager.clone();
         let tx = self.tx.clone();
         let rx = self.rx.clone();
@@ -145,17 +145,18 @@ impl ChainNode<LocalTransport> {
         });
 
         let mem_pool = self.mem_pool.clone();
-        thread::spawn(move || loop {
-            thread::sleep(block_time);
-            // check is server has miner
-            // miner takes transactions from mem pool on each block duration
-            if let Ok(mut miner) = miner.lock() {
-                if let Ok(mut pool) = mem_pool.lock() {
-                    let txs = pool.take(2);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(block_time);
+                // check is server has miner
+                // miner takes transactions from mem pool on each block duration
+                if let Ok(mut miner) = miner.lock() {
+                    if let Ok(mut pool) = mem_pool.lock() {
+                        let txs = pool.take(2);
 
-                    let header = random_header(1, random_hash());
+                        let header = random_header(1, random_hash());
 
-                    if !txs.is_empty() {
+                        // if !txs.is_empty() {
                         // get block from miner
                         miner.mine_block(header, txs);
 
@@ -165,9 +166,13 @@ impl ChainNode<LocalTransport> {
 
                         // update last block time
                         miner.last_block_time = Instant::now();
+                        // }
                     }
                 }
             }
         });
+
+        Ok(())
+        // handle.await?
     }
 }

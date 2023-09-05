@@ -2,13 +2,18 @@ use std::error::Error;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time;
 
 use bytes::{Buf, Bytes};
 use http_body_util::{BodyExt, Full};
 use hyper::server::conn::{http1, http2};
 use hyper::service::service_fn;
 use hyper::{body::Incoming as IncomingBody, header, Method, Request, Response, StatusCode};
-use orion_chain::api::router::Router;
+use orion_chain::api::server::ApiServer;
+use orion_chain::core::block::random_block;
+use orion_chain::core::blockchain::Blockchain;
+use orion_chain::core::header::random_header;
+use orion_chain::crypto::utils::random_hash;
 use tokio::net::{TcpListener, TcpStream};
 
 use orion_chain::{
@@ -39,29 +44,42 @@ use tokio::sync::Mutex;
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let mut chain_node = build_full_node()?;
-    chain_node.start();
+    // TODO: Remove transport manager construction here
+    let ts1 = LocalTransport::new("local");
+    let ts2 = LocalTransport::new("custom");
+    let ts3 = LocalTransport::new("remote");
+    let mut ts_manager = TransportManager::new();
 
-    let arc = Arc::new(Mutex::new(chain_node));
+    ts_manager.connect(ts1)?;
+    ts_manager.connect(ts2)?;
+    ts_manager.connect(ts3)?;
 
-    let router = Arc::new(Router::new(arc.clone()));
+    // TODO: Get config from file
+    let config = NodeConfig {
+        ts_manager,
+        block_time: time::Duration::from_secs(5),
+        private_key: Some(PrivateKey::new()),
+    };
 
-    let addr: SocketAddr = "127.0.0.1:1337".parse().unwrap();
+    // Create core blockchain data structure. The data structure
+    // does no server any function on its own, it needs
+    // to be added to the ChainNode to allow for inter peer communication
+    // as well as starting the mining/validation loops needed for
+    // a functioning blockchain.
+    let block = random_block(random_header(0, random_hash()));
+    let chain = Blockchain::new_with_genesis(block);
 
-    let listener = TcpListener::bind(&addr).await?;
-    println!("Listening on http://{}", addr);
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
+    // Create a ChainNode with newly created blockchain. ChainNode
+    // serves the purpose of composing all blockchain functionality together
+    // inter peer communication as well as block syncing, transaction processing
+    // loops
+    let mut chain_node = ChainNode::new(config, chain);
+    chain_node.start()?;
 
-        let router = router.clone();
-
-        tokio::task::spawn(async move {
-            let service = service_fn(|req| router.route_handler(req));
-
-            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                println!("Failed to serve connection: {:?}", err);
-            }
-        });
-    }
+    // Create main entry point for HTTP API server for the node,
+    // pass in Arc of ChainNode to access blockchain functionality
+    // within the Api
+    let arc_node = Arc::new(Mutex::new(chain_node));
+    let server = ApiServer::new(arc_node);
+    server.start().await
 }

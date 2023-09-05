@@ -6,5 +6,5 @@ pub mod hasher;
 pub mod header;
 pub mod storage;
 pub mod transaction;
-pub mod utils;
+pub mod util;
 pub mod validator;
