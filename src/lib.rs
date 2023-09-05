@@ -1,4 +1,5 @@
 #![allow(clippy::needless_range_loop)]
+#![allow(clippy::new_without_default)]
 
 use crypto::private_key::PrivateKey;
 use crypto::utils::random_hash;
@@ -22,7 +23,8 @@ use crate::core::{block::random_block, blockchain::Blockchain, header::random_he
 
 use network::{
     node::{ChainNode, NodeConfig},
-    transport::{ArcMut, LocalTransport, Transport, TransportManager},
+    transport::{LocalTransport, Transport, TransportManager},
+    types::ArcMut,
 };
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;

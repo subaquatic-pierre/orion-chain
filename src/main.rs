@@ -23,7 +23,8 @@ use orion_chain::{
     logger_init,
     network::{
         node::{ChainNode, NodeConfig},
-        transport::{ArcMut, LocalTransport, Transport, TransportManager},
+        transport::{LocalTransport, Transport, TransportManager},
+        types::ArcMut,
     },
     send_tx_loop, Result,
 };
@@ -57,7 +58,7 @@ async fn main() -> Result<()> {
     // TODO: Get config from file
     let config = NodeConfig {
         ts_manager,
-        block_time: time::Duration::from_secs(5),
+        block_time: time::Duration::from_secs(30),
         private_key: Some(PrivateKey::new()),
     };
 

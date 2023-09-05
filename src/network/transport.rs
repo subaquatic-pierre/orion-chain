@@ -3,6 +3,7 @@ use log::{info, warn};
 use crate::network::error::NetworkError;
 use std::borrow::{BorrowMut, Cow};
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::ops::Deref;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -10,28 +11,30 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use super::rpc::RPC;
+use super::tcp::{TcpPeer, TcpTransport};
+use super::types::ArcMut;
 
 pub type NetAddr = String;
 pub type Payload = Vec<u8>;
 
-pub struct ArcMut<T> {
-    inner: Arc<Mutex<T>>,
-}
+// pub struct ArcMut<T> {
+//     inner: Arc<Mutex<T>>,
+// }
 
-impl<T> ArcMut<T> {
-    pub fn new(data: T) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(data)),
-        }
-    }
-}
+// impl<T> ArcMut<T> {
+//     pub fn new(data: T) -> Self {
+//         Self {
+//             inner: Arc::new(Mutex::new(data)),
+//         }
+//     }
+// }
 
-impl<T> Deref for ArcMut<T> {
-    type Target = Arc<Mutex<T>>;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
+// impl<T> Deref for ArcMut<T> {
+//     type Target = Arc<Mutex<T>>;
+//     fn deref(&self) -> &Self::Target {
+//         &self.inner
+//     }
+// }
 
 pub trait Transport {
     fn address(&self) -> NetAddr;
@@ -115,13 +118,25 @@ where
 {
     peers: Vec<T>,
     threads: Vec<JoinHandle<()>>,
+    // new tcp methods
+    // tcp: TcpTransport,
+    // tcp_peer: HashMap<std::net::SocketAddr, TcpPeer>,
+    // peer_sender: ArcMut<Sender<TcpPeer>>,
+    // peer_receiver: ArcMut<Receiver<TcpPeer>>,
 }
 
 impl TransportManager<LocalTransport> {
     pub fn new() -> Self {
+        let (tx, rx) = channel::<TcpPeer>();
+        let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
+
         Self {
             peers: vec![],
             threads: vec![],
+            // tcp: TcpTransport::new("5000", tx.clone()),
+            // tcp_peer: HashMap::new(),
+            // peer_sender: tx,
+            // peer_receiver: rx,
         }
     }
 
@@ -190,6 +205,7 @@ impl TransportManager<LocalTransport> {
             });
             self.threads.push(th);
         }
+
         Ok(())
     }
 }

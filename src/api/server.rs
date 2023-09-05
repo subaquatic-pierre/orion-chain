@@ -12,7 +12,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::api::util::TokioIo;
 use crate::core::blockchain::Blockchain;
 use crate::network::node::ChainNode;
-use crate::network::transport::{ArcMut, LocalTransport};
+use crate::network::{transport::LocalTransport, types::ArcMut};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;

@@ -1,5 +1,6 @@
 use core::time;
 use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
@@ -25,11 +26,10 @@ use crate::{
 use super::{
     error::NetworkError,
     rpc::RPC,
-    transport::{
-        ArcMut, HttpTransport, LocalTransport, NetAddr, Payload, Transport, TransportManager,
-    },
+    transport::{HttpTransport, LocalTransport, NetAddr, Payload, Transport, TransportManager},
     tx_pool::TxPool,
 };
+use super::{tcp::TcpTransport, types::ArcMut};
 
 pub struct NodeConfig<T>
 where
@@ -39,6 +39,7 @@ where
     pub block_time: time::Duration,
     pub private_key: Option<PrivateKey>,
 }
+
 pub struct BlockMiner {
     pub last_block_time: Instant,
 }
@@ -75,9 +76,10 @@ where
     rx: ArcMut<Receiver<RPC>>,
     tx: ArcMut<Sender<RPC>>,
     block_time: time::Duration,
-    mem_pool: Arc<Mutex<TxPool>>,
-    miner: Arc<Mutex<BlockMiner>>,
+    mem_pool: ArcMut<TxPool>,
+    miner: ArcMut<BlockMiner>,
     pub chain: Arc<Blockchain>,
+    tcp: ArcMut<TcpTransport>,
 }
 
 impl ChainNode<LocalTransport> {
@@ -86,14 +88,18 @@ impl ChainNode<LocalTransport> {
         let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
         let ts_manager = ArcMut::new(config.ts_manager);
 
+        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let tcp = TcpTransport::new(SocketAddr::new(addr, 5000), tx.clone(), rx.clone());
+
         Self {
             transport_manager: ts_manager,
             rx,
             tx,
             block_time: config.block_time,
-            mem_pool: Arc::new(Mutex::new(TxPool::new())),
-            miner: Arc::new(Mutex::new(BlockMiner::new())),
+            mem_pool: ArcMut::new(TxPool::new()),
+            miner: ArcMut::new(BlockMiner::new()),
             chain: Arc::new(chain),
+            tcp: ArcMut::new(tcp),
         }
     }
 
@@ -113,7 +119,6 @@ impl ChainNode<LocalTransport> {
     pub fn start(&mut self) -> Result<(), GenericError> {
         let ts_manager = self.transport_manager.clone();
         let tx = self.tx.clone();
-        let rx = self.rx.clone();
 
         let miner = self.miner.clone();
 
@@ -125,12 +130,20 @@ impl ChainNode<LocalTransport> {
                 .expect("unable to initialize transport manager");
         }
 
+        self.tcp.lock().unwrap().init();
+
         let mem_pool = self.mem_pool.clone();
+        let rx = self.rx.clone();
         // Spawn thread to handle message, main RPC handler thread
         thread::spawn(move || {
             if let Ok(rx) = rx.lock() {
                 for msg in rx.iter() {
-                    info!("MESSAGE: from: {} - to: {}", msg.sender, msg.receiver);
+                    info!(
+                        "MESSAGE: from: {} - to: {} with message: {}",
+                        msg.sender,
+                        msg.receiver,
+                        String::from_utf8_lossy(&msg.payload)
+                    );
 
                     // check if msg is transaction
                     let tx = Transaction::new(&msg.payload);
