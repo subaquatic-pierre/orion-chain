@@ -1,5 +1,6 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::new_without_default)]
+#![allow(clippy::all)]
 
 use crypto::private_key::PrivateKey;
 use crypto::utils::random_hash;
@@ -87,7 +88,7 @@ pub fn send_tx_loop(mut server: ChainNode<LocalTransport>) -> JoinHandle<()> {
             let random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
 
             server
-                .send_msg(addr, "remote".to_string(), random_number)
+                .send_rpc(addr, "remote".to_string(), random_number)
                 .ok();
             thread::sleep(time::Duration::from_secs(1));
 

@@ -131,7 +131,7 @@ mod test {
         let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
         let header = random_header(0, genesis_hash);
         let genesis_block = random_block(header);
-        let validator = BlockValidator::new_boxed();
+        let validator = BlockValidator::new();
         let mut bc = Blockchain::new(genesis_block, validator);
 
         assert!(bc.is_ok())

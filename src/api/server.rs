@@ -92,7 +92,12 @@ pub async fn tx_response(
 
     let node = node.lock().await;
 
-    node.send_msg("local".to_string(), "remote".to_string(), random_number)
+    // let rpc = RPC {
+    //     sender: "local".to_string(),
+    //     receiver: "remote".to_string(),
+    //     payload: random_number,
+    // };
+    node.send_rpc("local".to_string(), "remote".to_string(), random_number)
         .ok();
 
     data["test"] = serde_json::Value::from("test_value");
