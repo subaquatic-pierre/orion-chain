@@ -12,7 +12,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::api::util::TokioIo;
 use crate::core::blockchain::Blockchain;
 use crate::network::node::ChainNode;
-use crate::network::{transport::LocalTransport, types::ArcMut};
+use crate::network::{transport, types::ArcMut};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
@@ -53,7 +53,7 @@ pub static URL: &str = "http://127.0.0.1:1337/json_api";
 // }
 
 pub async fn api_post_response(
-    node: &Arc<Mutex<ChainNode<LocalTransport>>>,
+    node: &Arc<Mutex<ChainNode>>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -76,7 +76,7 @@ pub async fn api_post_response(
     Ok(response)
 }
 pub async fn tx_response(
-    node: &Arc<Mutex<ChainNode<LocalTransport>>>,
+    node: &Arc<Mutex<ChainNode>>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -127,11 +127,11 @@ pub async fn api_get_response() -> Result<Response<BoxBody>> {
 }
 
 pub struct HttpRouter {
-    node: Arc<Mutex<ChainNode<LocalTransport>>>,
+    node: Arc<Mutex<ChainNode>>,
 }
 
 impl HttpRouter {
-    pub fn new(node: Arc<Mutex<ChainNode<LocalTransport>>>) -> Self {
+    pub fn new(node: Arc<Mutex<ChainNode>>) -> Self {
         Self { node }
     }
 
@@ -156,12 +156,12 @@ impl HttpRouter {
 }
 
 pub struct ApiServer {
-    node: Arc<Mutex<ChainNode<LocalTransport>>>,
+    node: Arc<Mutex<ChainNode>>,
     router: Arc<Mutex<HttpRouter>>,
 }
 
 impl ApiServer {
-    pub fn new(node: Arc<Mutex<ChainNode<LocalTransport>>>) -> Self {
+    pub fn new(node: Arc<Mutex<ChainNode>>) -> Self {
         let router = Arc::new(Mutex::new(HttpRouter::new(node.clone())));
 
         Self { node, router }

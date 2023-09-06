@@ -31,7 +31,7 @@ use network::{
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
 
-pub fn build_full_node() -> Result<ChainNode<LocalTransport>> {
+pub fn build_full_node() -> Result<ChainNode> {
     let ts1 = LocalTransport::new("local");
     let ts2 = LocalTransport::new("custom");
     let ts3 = LocalTransport::new("remote");
@@ -53,7 +53,7 @@ pub fn build_full_node() -> Result<ChainNode<LocalTransport>> {
     Ok(ChainNode::new(config, chain))
 }
 
-pub fn send_tx_loop(mut server: ChainNode<LocalTransport>) -> JoinHandle<()> {
+pub fn send_tx_loop(mut server: ChainNode) -> JoinHandle<()> {
     struct Ticker {
         pub val: i32,
     }

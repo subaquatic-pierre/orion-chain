@@ -68,11 +68,7 @@ impl BlockMiner {
     }
 }
 
-pub struct ChainNode<T>
-where
-    T: Transport,
-{
-    transport_manager: ArcMut<TransportManager<T>>,
+pub struct ChainNode {
     rpc_rx: ArcMut<Receiver<RPC>>,
     rpc_tx: ArcMut<Sender<RPC>>,
     block_time: time::Duration,
@@ -82,7 +78,7 @@ where
     tcp: ArcMut<TcpController>,
 }
 
-impl ChainNode<LocalTransport> {
+impl ChainNode {
     pub fn new(config: NodeConfig<LocalTransport>, chain: Blockchain) -> Self {
         let (tx, rx) = channel::<RPC>();
         let (rpc_tx, rpc_rx) = (ArcMut::new(tx), ArcMut::new(rx));
@@ -93,7 +89,6 @@ impl ChainNode<LocalTransport> {
         let tcp = TcpController::new(SocketAddr::new(addr, 5000), rpc_tx.clone()).unwrap();
 
         Self {
-            transport_manager: ts_manager,
             rpc_rx,
             rpc_tx,
             block_time: config.block_time,
@@ -112,9 +107,6 @@ impl ChainNode<LocalTransport> {
         to_addr: NetAddr,
         payload: Payload,
     ) -> Result<(), NetworkError> {
-        if let Ok(ts_manager) = self.transport_manager.lock() {
-            ts_manager.send_msg(from_addr.to_string(), to_addr.to_string(), payload.clone())?
-        }
         if let Ok(tcp) = self.tcp.lock() {
             let rpc = RPC {
                 sender: from_addr,
@@ -128,25 +120,27 @@ impl ChainNode<LocalTransport> {
     }
 
     pub fn start(&mut self) -> Result<(), GenericError> {
-        let ts_manager = self.transport_manager.clone();
-        let tx = self.rpc_tx.clone();
-
-        let miner = self.miner.clone();
-
-        let block_time = self.block_time;
-
-        if let Ok(ts_manager) = ts_manager.lock().as_mut() {
-            ts_manager
-                .init(tx)
-                .expect("unable to initialize transport manager");
-        }
-
         // Start TcpController
         // launches all threads need to communicate with peers
         // all messages received from peers are send back on self.rpc_tx
         // chanel
-        self.tcp.lock().unwrap().init(vec![]);
+        self.tcp.lock().unwrap().start(vec![]);
 
+        // Start thread to listen for all incoming RPC
+        // messages
+        self.spawn_rpc_thread();
+
+        // Spawn miner thread if ChainNode is miner
+        self.spawn_miner_thread();
+
+        Ok(())
+        // handle.await?
+    }
+
+    // ---
+    // Private Methods
+    // ---
+    fn spawn_rpc_thread(&self) {
         let mem_pool = self.mem_pool.clone();
         let rpc_rx: Arc<Mutex<Receiver<RPC>>> = self.rpc_rx.clone();
         // Spawn thread to handle message, main RPC handler thread
@@ -171,10 +165,15 @@ impl ChainNode<LocalTransport> {
                 }
             }
         });
+    }
+
+    fn spawn_miner_thread(&self) {
+        let block_time = self.block_time;
+        let miner = self.miner.clone();
+        let mem_pool = self.mem_pool.clone();
 
         // TODO: check if ChainNode has block miner
         // spawn mining thread if exists
-        let mem_pool = self.mem_pool.clone();
         thread::spawn(move || {
             loop {
                 thread::sleep(block_time);
@@ -201,8 +200,5 @@ impl ChainNode<LocalTransport> {
                 }
             }
         });
-
-        Ok(())
-        // handle.await?
     }
 }

@@ -27,6 +27,7 @@ use super::{
 pub struct TcpController {
     node_addr: SocketAddr,
     hb_interval: u64,
+    hb_threshhold: u64,
     listener: ArcMut<TcpListener>,
     peers: ArcMut<HashMap<SocketAddr, TcpPeer>>,
 
@@ -52,8 +53,6 @@ impl TcpController {
         let (tx, rx) = channel::<PeerMessage>();
         let (peer_msg_tx, peer_msg_rx) = (ArcMut::new(tx), ArcMut::new(rx));
 
-        // TODO: CONFIG, get heartbeat interval from config
-
         Ok(Self {
             node_addr,
             listener: ArcMut::new(listener),
@@ -61,69 +60,52 @@ impl TcpController {
             rpc_tx,
             peer_msg_rx,
             peer_msg_tx,
+
+            // TODO: CONFIG, get heartbeat interval from config, get heartbeat threshhold
+            // from config
             hb_interval: 5,
+            hb_threshhold: 600,
         })
     }
 
-    pub fn init(&mut self, known_peers: Vec<SocketAddr>) {
-        let peers = self.peers.clone();
-        let listener = self.listener.clone();
-        let peer_msg_tx = self.peer_msg_tx.clone();
-        let node_addr = self.node_addr;
+    // Main method used to start TcpController
+    // calls private methods to initialize each phase
+    pub fn start(&mut self, known_peers: Vec<SocketAddr>) {
+        self.init_message_receiver();
+        self.init_outgoing_peers(known_peers);
+        self.init_heartbeats();
+        self.init_listener();
+    }
 
-        // spawn main thread to listen to incoming connections
-        // create new peer and add to peer set on each
-        // new stream established
-        thread::spawn(move || {
-            info!("initialized new TCP controller for ChainNode at address: {node_addr}");
+    pub fn get_peer_addrs(&self) -> Vec<SocketAddr> {
+        self.peers.lock().unwrap().keys().cloned().collect()
+    }
 
-            if let Ok(listener) = listener.lock() {
-                for stream in listener.incoming().flatten() {
-                    let remote_addr = stream.peer_addr().unwrap();
-                    info!("new peer connected with remote address: {remote_addr}");
+    // pub fn send_rpc(&self, addr: SocketAddr, rpc: RPC) {
+    pub fn send_rpc(&self, rpc: RPC) {
+        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
+            // if let Some(peer) = self.peers.lock().unwrap().get_(&addr) {
+            let msg = PeerMessage::RPC(self.node_addr, rpc.to_bytes());
+            peer.send_msg(&msg);
+            break;
+        }
+    }
 
-                    // split tcp stream, used for incoming and outgoing messages
-                    let (reader, writer) = split_stream(stream);
+    pub fn broadcast(&self, msg: &PeerMessage) {
+        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
+            peer.send_msg(msg);
+        }
+    }
 
-                    let mut peer = TcpPeer::new(
-                        remote_addr,
-                        node_addr,
-                        PeerStreamDirection::Incoming,
-                        reader,
-                        writer,
-                        peer_msg_tx.clone(),
-                    );
+    // ---
+    // Private Methods
+    // ---
 
-                    // start handler for incoming messages on peer
-                    peer.spawn_incoming_handler();
-
-                    // insert peer into peer set
-                    peers.lock().unwrap().insert(remote_addr, peer);
-                }
-            } else {
-                error!("unable to get lock on listener in TCP controller");
-            }
-        });
-
-        let peers = self.peers.clone();
-        let hb_interval = self.hb_interval;
-        // spawn thread to send heartbeat messages to peers
-        thread::spawn(move || loop {
-            debug!(
-                "trying to send to all peers {:?}",
-                peers.lock().unwrap().keys()
-            );
-            for (addr, peer) in peers.lock().as_mut().unwrap().iter_mut() {
-                let msg = PeerMessage::Ping(*addr, b"PING".to_vec());
-                peer.send_msg(&msg);
-            }
-            thread::sleep(time::Duration::from_secs(hb_interval));
-
-            // TODO: check peer last heartbeat, remove if older than last
-            // heartbeat threshold
-        });
-
+    // Spawn thread to handle all incoming messages from
+    // peers
+    fn init_message_receiver(&self) {
         // get data to be used in thread below
+        let node_addr = self.node_addr;
         let peers = self.peers.clone();
         let rpc_tx = self.rpc_tx.clone();
         let peer_msg_rx = self.peer_msg_rx.clone();
@@ -179,7 +161,54 @@ impl TcpController {
                 }
             }
         });
+    }
 
+    // Spawn main Tcp listener thread
+    // for peers to connect to
+    fn init_listener(&self) {
+        let peers = self.peers.clone();
+        let listener = self.listener.clone();
+        let peer_msg_tx = self.peer_msg_tx.clone();
+        let node_addr = self.node_addr;
+
+        // spawn main thread to listen to incoming connections
+        // create new peer and add to peer set on each
+        // new stream established
+        thread::spawn(move || {
+            info!("initialized new TCP controller for ChainNode at address: {node_addr}");
+
+            if let Ok(listener) = listener.lock() {
+                for stream in listener.incoming().flatten() {
+                    let remote_addr = stream.peer_addr().unwrap();
+                    info!("new peer connected with remote address: {remote_addr}");
+
+                    // split tcp stream, used for incoming and outgoing messages
+                    let (reader, writer) = split_stream(stream);
+
+                    let mut peer = TcpPeer::new(
+                        remote_addr,
+                        node_addr,
+                        PeerStreamDirection::Incoming,
+                        reader,
+                        writer,
+                        peer_msg_tx.clone(),
+                    );
+
+                    // start handler for incoming messages on peer
+                    peer.spawn_incoming_handler();
+
+                    // insert peer into peer set
+                    peers.lock().unwrap().insert(remote_addr, peer);
+                }
+            } else {
+                error!("unable to get lock on listener in TCP controller");
+            }
+        });
+    }
+
+    // Create peer for each know peer, known peers
+    // is passed from start method
+    fn init_outgoing_peers(&self, known_peers: Vec<SocketAddr>) {
         // spawn outgoing peer connections
         for addr in known_peers {
             match TcpStream::connect(addr) {
@@ -209,24 +238,28 @@ impl TcpController {
         }
     }
 
-    pub fn get_peer_addrs(&self) -> Vec<SocketAddr> {
-        self.peers.lock().unwrap().keys().cloned().collect()
-    }
+    // Initialize heartbeat thread to check status
+    // of all peers determined by heartbeat interval set
+    // on main struct
+    fn init_heartbeats(&self) {
+        let peers = self.peers.clone();
+        let hb_interval = self.hb_interval;
 
-    // pub fn send_rpc(&self, addr: SocketAddr, rpc: RPC) {
-    pub fn send_rpc(&self, rpc: RPC) {
-        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
-            // if let Some(peer) = self.peers.lock().unwrap().get_(&addr) {
-            let msg = PeerMessage::RPC(self.node_addr, rpc.to_bytes());
-            peer.send_msg(&msg);
-            break;
-        }
-    }
+        // spawn thread to send heartbeat messages to peers
+        thread::spawn(move || loop {
+            debug!(
+                "trying to send to all peers {:?}",
+                peers.lock().unwrap().keys()
+            );
+            for (addr, peer) in peers.lock().as_mut().unwrap().iter_mut() {
+                let msg = PeerMessage::Ping(*addr, b"PING".to_vec());
+                peer.send_msg(&msg);
+            }
+            thread::sleep(time::Duration::from_secs(hb_interval));
 
-    pub fn broadcast(&self, msg: &PeerMessage) {
-        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
-            peer.send_msg(msg);
-        }
+            // TODO: check peer last heartbeat, remove if older than last
+            // heartbeat threshold
+        });
     }
 }
 
