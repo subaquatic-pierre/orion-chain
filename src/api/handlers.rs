@@ -1,32 +1,9 @@
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex as StdMutex};
-
 use bytes::{Buf, Bytes};
 use http_body_util::{BodyExt, Full};
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper::{body::Incoming as IncomingBody, header, Method, Request, Response, StatusCode};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{Mutex, MutexGuard};
+use hyper::{body::Incoming as IncomingBody, header, Request, Response, StatusCode};
 
-use crate::api::util::TokioIo;
-use crate::core::blockchain::Blockchain;
-use crate::network::node::ChainNode;
-use crate::network::rpc::{RpcHandler, RpcHeader, RPC};
-use crate::network::{transport, types::ArcMut};
-
-pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
-pub type Result<T> = std::result::Result<T, GenericError>;
-pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
-
-pub static INDEX: &[u8] = b"<a href=\"test.html\">test.html</a>";
-pub static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
-pub static NOTFOUND: &[u8] = b"Not Found";
-pub static POST_DATA: &str = r#"{"original": "data"}"#;
-pub static URL: &str = "http://127.0.0.1:1337/json_api";
-
-use super::router::HttpRouter;
-use super::types::ArcRcpHandler;
+use super::types::{ArcRcpHandler, BoxBody, Result};
+use crate::network::rpc::{RpcHeader, RPC};
 
 // async fn client_request_response() -> Result<Response<BoxBody>> {
 //     let req = Request::builder()
@@ -98,7 +75,7 @@ pub async fn get_block(
 }
 
 pub async fn get_tx(
-    rpc_handler: &ArcRcpHandler,
+    _rpc_handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -110,7 +87,7 @@ pub async fn get_tx(
     // let block = chain.get_header_cloned(0).unwrap();
     // let block_str = format!("{:?}", block);
 
-    let random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+    let _random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
 
     // let node = rpc_handler.lock();
 
@@ -133,7 +110,7 @@ pub async fn get_tx(
 }
 
 pub async fn create_tx(
-    rpc_handler: &ArcRcpHandler,
+    _rpc_handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -145,7 +122,7 @@ pub async fn create_tx(
     // let block = chain.get_header_cloned(0).unwrap();
     // let block_str = format!("{:?}", block);
 
-    let random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+    let _random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
 
     // let node = rpc_handler.lock();
 
@@ -181,6 +158,8 @@ pub async fn create_tx(
 //     };
 //     Ok(res)
 // }
+
+pub static NOTFOUND: &[u8] = b"Not Found";
 
 pub async fn not_found() -> Result<Response<BoxBody>> {
     // Return 404 not found response.

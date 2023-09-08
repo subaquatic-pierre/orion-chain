@@ -1,6 +1,6 @@
 use core::time;
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
@@ -85,9 +85,8 @@ impl ChainNode {
         let (rpc_tx, rpc_rx) = (ArcMut::new(tx), ArcMut::new(rx));
 
         // TODO: CONFIG, get listener address from config
-        let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let tcp_controller =
-            TcpController::new(SocketAddr::new(addr, 5000), rpc_tx.clone()).unwrap();
+        let addr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+        let tcp_controller = TcpController::new(addr, rpc_tx.clone()).unwrap();
 
         let tcp_controller = ArcMut::new(tcp_controller);
         let miner = ArcMut::new(BlockMiner::new());

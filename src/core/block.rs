@@ -1,20 +1,15 @@
-use std::io::{BufWriter, Read, Write};
-
-use ecdsa::signature::rand_core::block;
-use k256::pkcs8::der::Reader;
+use std::io::Write;
 
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
-    utils::random_hash,
 };
 
 use super::{
     encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
     error::CoreError,
     hasher::Hasher,
-    header::{random_header, Header},
+    header::Header,
     transaction::Transaction,
-    util::timestamp,
 };
 
 #[derive(Debug, Clone)]
@@ -119,7 +114,7 @@ impl Block {
         }
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, CoreError> {
+    pub fn decode(_bytes: &[u8]) -> Result<Self, CoreError> {
         todo!()
     }
 
@@ -283,6 +278,22 @@ impl Hasher<Block> for Block {
 
 #[cfg(test)]
 mod test {
+    use std::io::{BufWriter, Read, Write};
+
+    use crate::crypto::{
+        hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
+        utils::random_hash,
+    };
+
+    use crate::core::{
+        encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
+        error::CoreError,
+        hasher::Hasher,
+        header::Header,
+        transaction::Transaction,
+        util::timestamp,
+    };
+
     use crate::core::{
         header::random_header,
         transaction::{random_signed_tx, random_tx},

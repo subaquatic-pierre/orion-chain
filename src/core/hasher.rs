@@ -1,11 +1,6 @@
-use sha256::digest;
+use crate::crypto::hash::Hash;
 
-use crate::crypto::{error::CryptoError, hash::Hash};
-
-use super::{
-    block::Block,
-    encoding::{ByteDecoding, ByteEncoding},
-};
+use super::encoding::ByteEncoding;
 
 pub trait Hasher<E>
 where

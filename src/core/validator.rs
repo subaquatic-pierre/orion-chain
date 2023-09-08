@@ -1,16 +1,4 @@
-use std::sync::MutexGuard;
-
-use super::{
-    block::Block,
-    blockchain::Blockchain,
-    error::CoreError,
-    hasher::Hasher,
-    header::{Header, HeaderManager},
-};
-
-// pub trait Validator {
-//     fn validate_block(&self, headers: &HeaderManager, block: &Block) -> Result<(), CoreError>;
-// }
+use super::{block::Block, error::CoreError, hasher::Hasher, header::HeaderManager};
 
 pub struct BlockValidator {}
 

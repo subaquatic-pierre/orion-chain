@@ -127,7 +127,6 @@ impl TcpPeer {
 
     pub fn send_msg(&mut self, msg: &PeerMessage) {
         let remote_addr = self.remote_addr;
-        info!("trying to send message");
         if let Ok(writer) = self.writer.lock().as_mut() {
             // main method to send messages to remote peers
             // always send payload type as defined in PeerMessage payload
@@ -139,7 +138,7 @@ impl TcpPeer {
 
             // flush writer to ensure message is sent
             if let Err(e) = writer.flush() {
-                error!("unable to send message sent to: {remote_addr:?}, error: {e}",)
+                error!("unable to send message to: {remote_addr:?}, error: {e}",)
             }
         }
     }

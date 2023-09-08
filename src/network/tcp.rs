@@ -24,7 +24,7 @@ use super::{
 pub struct TcpController {
     pub node_addr: SocketAddr,
     hb_interval: u64,
-    hb_threshhold: u64,
+    _hb_threshhold: u64,
     listener: ArcMut<TcpListener>,
     peers: ArcMut<HashMap<SocketAddr, TcpPeer>>,
 
@@ -61,7 +61,7 @@ impl TcpController {
             // TODO: CONFIG, get heartbeat interval from config, get heartbeat threshhold
             // from config
             hb_interval: 5,
-            hb_threshhold: 600,
+            _hb_threshhold: 600,
         })
     }
 
@@ -112,9 +112,9 @@ impl TcpController {
             if let Ok(peer_msg_rx) = peer_msg_rx.lock() {
                 for msg in peer_msg_rx.iter() {
                     match msg {
-                        PeerMessage::Disconnect(addr, msg) => {
+                        PeerMessage::Disconnect(addr, _msg) => {
                             info!(
-                                "disconnect message received, removing peer from peer list {addr}, message: {msg}"
+                                "disconnect message received, removing peer from peer list {addr}"
                             );
                             peers.lock().unwrap().remove(&addr);
                         }

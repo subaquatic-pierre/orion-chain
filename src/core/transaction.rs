@@ -1,7 +1,3 @@
-use std::error::Error;
-
-use k256::pkcs8::der::Encode;
-
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
 };

@@ -97,11 +97,12 @@ impl Display for PublicKey {
 }
 
 mod test {
-    use super::*;
-    use crate::crypto::private_key::PrivateKey;
 
     #[test]
     fn test_public_key() {
+        use super::*;
+        use crate::crypto::private_key::PrivateKey;
+
         let pvt_key = PrivateKey::new();
         let pub_key = pvt_key.pub_key();
 

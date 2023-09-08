@@ -1,34 +1,29 @@
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 
-use bytes::{Buf, Bytes};
-use http_body_util::{BodyExt, Full};
+use bytes::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{body::Incoming as IncomingBody, header, Method, Request, Response, StatusCode};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 use crate::api::util::TokioIo;
-use crate::core::blockchain::Blockchain;
 use crate::network::node::ChainNode;
-use crate::network::{transport, types::ArcMut};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 
-pub static INDEX: &[u8] = b"<a href=\"test.html\">test.html</a>";
-pub static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
-pub static NOTFOUND: &[u8] = b"Not Found";
-pub static POST_DATA: &str = r#"{"original": "data"}"#;
-pub static URL: &str = "http://127.0.0.1:1337/json_api";
+// pub static INDEX: &[u8] = b"<a href=\"test.html\">test.html</a>";
+// pub static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
+// pub static NOTFOUND: &[u8] = b"Not Found";
+// pub static POST_DATA: &str = r#"{"original": "data"}"#;
+// pub static URL: &str = "http://127.0.0.1:1337/json_api";
 
 use super::router::HttpRouter;
-use super::types::ArcRcpHandler;
 
 pub struct ApiServer {
-    node: ChainNode,
+    _node: ChainNode,
     router: Arc<Mutex<HttpRouter>>,
 }
 
@@ -36,7 +31,10 @@ impl ApiServer {
     pub fn new(node: ChainNode) -> Self {
         let router = Arc::new(Mutex::new(HttpRouter::new(node.rpc_handler())));
 
-        Self { node, router }
+        Self {
+            _node: node,
+            router,
+        }
     }
 
     pub async fn start(&self) -> Result<()> {

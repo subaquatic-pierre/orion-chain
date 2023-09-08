@@ -1,13 +1,12 @@
-use crate::crypto::{hash::Hash, public_key::PublicKey, signature::Signature, utils::random_hash};
 use std::time::SystemTime;
 
 use super::{
     encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
     error::CoreError,
     hasher::Hasher,
-    transaction::Transaction,
     util::timestamp,
 };
+use crate::crypto::{hash::Hash, utils::random_hash};
 
 #[derive(Clone, Debug)]
 pub struct Header {
@@ -190,6 +189,9 @@ impl HexDecoding for Header {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::crypto::{
+        hash::Hash, public_key::PublicKey, signature::Signature, utils::random_hash,
+    };
 
     #[test]
     fn test_header_parse_bytes() {

@@ -16,7 +16,7 @@ impl MemoryStorage {
 }
 
 impl Storage for MemoryStorage {
-    fn put(&self, block: &Block) -> Result<(), CoreError> {
+    fn put(&self, _block: &Block) -> Result<(), CoreError> {
         Ok(())
     }
 }

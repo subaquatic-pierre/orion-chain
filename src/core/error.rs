@@ -18,10 +18,7 @@ impl Display for CoreError {
             Self::Parsing(msg) => write!(f, "{msg}"),
             Self::Transaction(msg) => write!(f, "{msg}"),
             Self::Block(msg) => write!(f, "{msg}"),
-            Self::Block(msg) => write!(f, "{msg}"),
             Self::CryptoError(msg) => write!(f, "{msg}"),
-
-            _ => write!(f, "Unknown keypair error"),
         }
     }
 }
