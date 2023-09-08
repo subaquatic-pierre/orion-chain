@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::api::util::TokioIo;
 use crate::core::blockchain::Blockchain;
 use crate::network::node::ChainNode;
+use crate::network::rpc::{RpcHandler, RpcHeader, RPC};
 use crate::network::{transport, types::ArcMut};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -24,41 +25,27 @@ pub static NOTFOUND: &[u8] = b"Not Found";
 pub static POST_DATA: &str = r#"{"original": "data"}"#;
 pub static URL: &str = "http://127.0.0.1:1337/json_api";
 
-use super::router::HttpRouter;
 use super::types::ArcRcpHandler;
 
-pub struct ApiServer {
-    node: ChainNode,
-    router: Arc<Mutex<HttpRouter>>,
+use super::handlers::{create_tx, get_block, get_tx, not_found};
+
+pub struct HttpRouter {
+    rpc_handler: ArcRcpHandler,
 }
 
-impl ApiServer {
-    pub fn new(node: ChainNode) -> Self {
-        let router = Arc::new(Mutex::new(HttpRouter::new(node.rpc_handler())));
-
-        Self { node, router }
+impl HttpRouter {
+    pub fn new(rpc_handler: ArcRcpHandler) -> Self {
+        Self { rpc_handler }
     }
 
-    pub async fn start(&self) -> Result<()> {
-        let addr: SocketAddr = "127.0.0.1:1337".parse().unwrap();
-
-        let listener = TcpListener::bind(&addr).await?;
-        println!("Listening on http://{}", addr);
-
-        loop {
-            let (stream, _) = listener.accept().await?;
-            let io = TokioIo::new(stream);
-
-            let router = self.router.clone();
-
-            tokio::task::spawn(async move {
-                let router = router.lock().await;
-                let service = service_fn(|req| router.route_handler(req));
-
-                if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                    println!("Failed to serve connection: {:?}", err);
-                }
-            });
+    pub async fn route_handler(&self, req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
+        let rpc_handler = &self.rpc_handler.clone();
+        // let chain = &self.node.lock().await.chain;
+        match (req.method(), req.uri().path()) {
+            (&Method::POST, "/create-tx") => create_tx(rpc_handler, req).await,
+            (&Method::POST, "/get-tx") => get_tx(rpc_handler, req).await,
+            (&Method::POST, "/get-block") => get_block(rpc_handler, req).await,
+            _ => not_found().await,
         }
     }
 }

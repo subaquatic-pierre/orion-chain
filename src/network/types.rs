@@ -1,8 +1,13 @@
+use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
+use super::rpc::RPC;
+
 pub type NetAddr = String;
 pub type Payload = Vec<u8>;
+
+pub type RpcChanMsg = (SocketAddr, RPC);
 
 pub struct ArcMut<T> {
     pub inner: Arc<Mutex<T>>,

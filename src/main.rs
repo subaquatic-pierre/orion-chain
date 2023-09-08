@@ -80,7 +80,9 @@ async fn main() -> Result<()> {
     // Create main entry point for HTTP API server for the node,
     // pass in Arc of ChainNode to access blockchain functionality
     // within the Api
-    let arc_node = Arc::new(Mutex::new(chain_node));
-    let server = ApiServer::new(arc_node);
+
+    let rpc_handler = chain_node.rpc_handler();
+    // let arc_node = Arc::new(Mutex::new(chain_node));
+    let server = ApiServer::new(chain_node);
     server.start().await
 }

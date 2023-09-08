@@ -5,6 +5,7 @@ use std::io::{BufReader, BufWriter, ErrorKind, Read, Result as IoResult, Write};
 
 use crate::core::encoding::{ByteDecoding, ByteEncoding};
 use crate::core::util::timestamp;
+use crate::lock;
 use crate::network::error::NetworkError;
 use std::borrow::{BorrowMut, Cow};
 use std::collections::HashMap;
@@ -16,23 +17,24 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time;
 
+use super::rpc::RpcHandler;
+use super::types::RpcChanMsg;
 use super::{
     message::PeerMessage,
     peer::{PeerStreamDirection, TcpPeer},
     rpc::RPC,
-    transport::Transport,
     types::{ArcMut, NetAddr, Payload},
 };
 
 pub struct TcpController {
-    node_addr: SocketAddr,
+    pub node_addr: SocketAddr,
     hb_interval: u64,
     hb_threshhold: u64,
     listener: ArcMut<TcpListener>,
     peers: ArcMut<HashMap<SocketAddr, TcpPeer>>,
 
     // channel used to send messages to ChainNode
-    rpc_tx: Arc<Mutex<Sender<RPC>>>,
+    rpc_tx: Arc<Mutex<Sender<RpcChanMsg>>>,
 
     // channel used to communicate with peer
     peer_msg_rx: ArcMut<Receiver<PeerMessage>>,
@@ -42,7 +44,7 @@ pub struct TcpController {
 impl TcpController {
     pub fn new(
         node_addr: SocketAddr,
-        rpc_tx: Arc<Mutex<Sender<RPC>>>,
+        rpc_tx: Arc<Mutex<Sender<RpcChanMsg>>>,
     ) -> Result<Self, NetworkError> {
         let listener = match TcpListener::bind(node_addr) {
             Ok(listener) => listener,
@@ -120,27 +122,29 @@ impl TcpController {
                                 "disconnect message received, removing peer from peer list {addr}, message: {msg}"
                             );
                             peers.lock().unwrap().remove(&addr);
-                            debug!("DISCONNECT message received from: {addr}");
                         }
                         PeerMessage::Error(addr, msg) => {
                             warn!("error received from peer: {addr} with message: {msg}");
                             peers.lock().unwrap().remove(&addr);
-                            debug!("ERROR message received from: {addr}");
                         }
-                        PeerMessage::RPC(addr, rpc_payload) => {
-                            // Send message back to ChainNode
-                            let rpc = RPC {
-                                sender: addr.to_string(),
-                                receiver: node_addr.to_string(),
-                                payload: rpc_payload,
-                            };
-                            rpc_tx.lock().unwrap().send(rpc).unwrap();
-                            debug!("RPC message received from: {addr}");
+                        PeerMessage::RPC(addr, rpc_bytes) => {
+                            match RPC::from_bytes(&rpc_bytes) {
+                                Ok(rpc) => {
+                                    // Send message back to ChainNode
+                                    if let Err(e) = lock!(rpc_tx).send((addr, rpc)) {
+                                        error!("error sending message on RPC chanel from TCPController: {e}");
+                                    };
+                                }
+                                Err(e) => {
+                                    error!("unable to decode RPC from peer message: {e}")
+                                }
+                            }
                         }
                         PeerMessage::Ping(addr, _) => {
                             // return pong message to peer
                             if let Some(peer) = peers.lock().unwrap().get_mut(&addr) {
                                 let ts = timestamp(time::SystemTime::now());
+                                peer.set_last_hb(ts);
                                 let pong_msg = PeerMessage::Pong(addr, vec![]);
                                 peer.send_msg(&pong_msg);
                                 debug!("PING message received from: {addr}");
@@ -187,7 +191,6 @@ impl TcpController {
 
                     let mut peer = TcpPeer::new(
                         remote_addr,
-                        node_addr,
                         PeerStreamDirection::Incoming,
                         reader,
                         writer,
@@ -218,7 +221,6 @@ impl TcpController {
                     // create new peer
                     let mut peer = TcpPeer::new(
                         addr,
-                        self.node_addr,
                         PeerStreamDirection::Outgoing,
                         reader,
                         writer,

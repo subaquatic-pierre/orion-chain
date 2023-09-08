@@ -13,37 +13,26 @@ pub enum PeerMessage {
     Pong(SocketAddr, Vec<u8>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
 pub enum MessageCodeMap {
-    RPC,
-    Error,
-    Disconnect,
-    Ping,
-    Pong,
-    Unknown,
+    RPC = 1,
+    Ping = 100,
+    Pong = 101,
+    Error = 200,
+    Disconnect = 201,
+    Unknown = 255,
 }
 
-impl MessageCodeMap {
-    fn from_byte(value: u8) -> Self {
-        match value {
-            1 => MessageCodeMap::RPC,
-            200 => MessageCodeMap::Error,
-            201 => MessageCodeMap::Disconnect,
-            100 => MessageCodeMap::Ping,
-            101 => MessageCodeMap::Pong,
-            _ => MessageCodeMap::Unknown,
-        }
+impl From<u8> for MessageCodeMap {
+    fn from(value: u8) -> Self {
+        unsafe { ::std::mem::transmute(value) }
     }
+}
 
-    fn to_byte(self) -> u8 {
-        match self {
-            MessageCodeMap::RPC => 1,
-            MessageCodeMap::Error => 200,
-            MessageCodeMap::Disconnect => 201,
-            MessageCodeMap::Ping => 100,
-            MessageCodeMap::Pong => 101,
-            MessageCodeMap::Unknown => 255,
-        }
+impl From<MessageCodeMap> for u8 {
+    fn from(value: MessageCodeMap) -> u8 {
+        value as u8
     }
 }
 
@@ -63,7 +52,8 @@ impl PeerMessage {
         let drop_first_byte = data[1..].to_vec();
 
         // get message code from first byte
-        let code: MessageCodeMap = MessageCodeMap::from_byte(first_byte);
+        let code: MessageCodeMap = first_byte.into();
+        // let code: MessageCodeMap = MessageCodeMap::from_byte(first_byte);
 
         // get message type from code
         let val = match code {
@@ -82,27 +72,27 @@ impl PeerMessage {
         let mut buf = vec![];
         match self {
             Self::Disconnect(_, msg) => {
-                buf.extend_from_slice(&[MessageCodeMap::Disconnect.to_byte()]);
+                buf.extend_from_slice(&[MessageCodeMap::Disconnect.into()]);
                 buf.extend_from_slice(msg.as_bytes());
                 buf
             }
             Self::Error(_, msg) => {
-                buf.extend_from_slice(&[MessageCodeMap::Error.to_byte()]);
+                buf.extend_from_slice(&[MessageCodeMap::Error.into()]);
                 buf.extend_from_slice(msg.as_bytes());
                 buf
             }
             Self::Ping(_, msg) => {
-                buf.extend_from_slice(&[MessageCodeMap::Ping.to_byte()]);
+                buf.extend_from_slice(&[MessageCodeMap::Ping.into()]);
                 buf.extend_from_slice(msg);
                 buf
             }
             Self::Pong(_, msg) => {
-                buf.extend_from_slice(&[MessageCodeMap::Pong.to_byte()]);
+                buf.extend_from_slice(&[MessageCodeMap::Pong.into()]);
                 buf.extend_from_slice(msg);
                 buf
             }
             Self::RPC(_, msg) => {
-                buf.extend_from_slice(&[MessageCodeMap::RPC.to_byte()]);
+                buf.extend_from_slice(&[MessageCodeMap::RPC.into()]);
                 buf.extend_from_slice(msg);
                 buf
             }
@@ -117,18 +107,18 @@ mod test {
     fn test_message_code() {
         let code = MessageCodeMap::RPC;
 
-        let num = code.to_byte();
+        let num: u8 = code.into();
 
         assert_eq!(num, 1);
 
         let num = 255_u8;
 
-        let val = MessageCodeMap::from_byte(num);
+        let val = MessageCodeMap::from(num);
         assert_eq!(format!("{:?}", MessageCodeMap::Unknown), format!("{val:?}"));
 
         let num = 100_u8;
 
-        let val = MessageCodeMap::from_byte(num);
+        let val = MessageCodeMap::from(num);
         assert_eq!(format!("{:?}", MessageCodeMap::Ping), format!("{val:?}"));
     }
 

@@ -34,15 +34,13 @@ pub struct TcpPeer {
     writer: ArcMut<BufWriter<TcpStream>>,
     direction: PeerStreamDirection,
     remote_addr: SocketAddr,
-    node_addr: SocketAddr,
     tcp_controller_tx: Arc<Mutex<Sender<PeerMessage>>>,
-    last_hb: u64,
+    pub last_hb: u64,
 }
 
 impl TcpPeer {
     pub fn new(
         remote_addr: SocketAddr,
-        node_addr: SocketAddr,
         direction: PeerStreamDirection,
         reader: ArcMut<BufReader<TcpStream>>,
         writer: ArcMut<BufWriter<TcpStream>>,
@@ -51,7 +49,6 @@ impl TcpPeer {
         let last_hb = timestamp(time::SystemTime::now());
         Self {
             remote_addr,
-            node_addr,
             reader,
             writer,
             direction,
@@ -69,7 +66,6 @@ impl TcpPeer {
 
         // get information of node to be used in messages
         let remote_addr = self.remote_addr;
-        let node_addr = self.node_addr;
 
         // start thread to listen to reads on stream
         thread::spawn(move || {
@@ -154,7 +150,9 @@ impl TcpPeer {
             }
 
             // flush writer to ensure message is sent
-            writer.flush().unwrap();
+            if let Err(e) = writer.flush() {
+                error!("unable to send message sent to: {remote_addr:?}, error: {e}",)
+            }
         }
     }
 

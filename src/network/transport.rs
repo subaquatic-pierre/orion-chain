@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use super::peer::TcpPeer;
-use super::rpc::RPC;
+use super::rpc::{RpcHeader, RPC};
 use super::tcp::TcpController;
 use super::types::ArcMut;
 
@@ -70,8 +70,7 @@ impl Transport for LocalTransport {
 
     fn send_msg(&self, from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
         let rpc = RPC {
-            sender: from_addr,
-            receiver: self.address(),
+            header: RpcHeader::GetBlock,
             payload,
         };
 
