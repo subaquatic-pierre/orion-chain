@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::VecDeque;
 
-use crate::{core::transaction::Transaction, crypto::hash::Hash};
+use crate::core::transaction::Transaction;
 
 pub struct TxPool {
     transactions: VecDeque<Transaction>,

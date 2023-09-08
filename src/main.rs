@@ -1,63 +1,24 @@
-use std::error::Error;
-
-use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time;
 
-use bytes::{Buf, Bytes};
-use http_body_util::{BodyExt, Full};
-use hyper::server::conn::{http1, http2};
-use hyper::service::service_fn;
-use hyper::{body::Incoming as IncomingBody, header, Method, Request, Response, StatusCode};
 use orion_chain::api::server::ApiServer;
 use orion_chain::core::block::random_block;
 use orion_chain::core::blockchain::Blockchain;
 use orion_chain::core::header::random_header;
 use orion_chain::crypto::utils::random_hash;
-use tokio::net::{TcpListener, TcpStream};
 
+use orion_chain::logger_init;
 use orion_chain::{
-    api::util::TokioIo,
-    build_full_node,
     crypto::private_key::PrivateKey,
-    logger_init,
-    network::{
-        node::{ChainNode, NodeConfig},
-        transport::{LocalTransport, Transport, TransportManager},
-        types::ArcMut,
-    },
-    send_tx_loop, Result,
+    network::node::{ChainNode, NodeConfig},
+    Result,
 };
-use tokio::sync::Mutex;
-
-// fn main() -> Result<(), Box<dyn Error>> {
-//     logger_init();
-
-//     let server = build_full_node()?;
-
-//     let handle = send_tx_loop(server);
-//     handle.join().unwrap();
-
-//     Ok(())
-// }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
-
-    // TODO: Remove transport manager construction here
-    let ts1 = LocalTransport::new("local");
-    let ts2 = LocalTransport::new("custom");
-    let ts3 = LocalTransport::new("remote");
-    let mut ts_manager = TransportManager::new();
-
-    ts_manager.connect(ts1)?;
-    ts_manager.connect(ts2)?;
-    ts_manager.connect(ts3)?;
+    logger_init();
 
     // TODO: Get config from file
     let config = NodeConfig {
-        ts_manager,
         block_time: time::Duration::from_secs(30),
         private_key: Some(PrivateKey::new()),
     };
@@ -80,9 +41,6 @@ async fn main() -> Result<()> {
     // Create main entry point for HTTP API server for the node,
     // pass in Arc of ChainNode to access blockchain functionality
     // within the Api
-
-    let rpc_handler = chain_node.rpc_handler();
-    // let arc_node = Arc::new(Mutex::new(chain_node));
     let server = ApiServer::new(chain_node);
     server.start().await
 }

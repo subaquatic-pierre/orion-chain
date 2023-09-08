@@ -1,18 +1,13 @@
-use log::{info, warn};
+use log::warn;
 
 use crate::network::error::NetworkError;
-use std::borrow::{BorrowMut, Cow};
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::ops::Deref;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use super::peer::TcpPeer;
 use super::rpc::{RpcHeader, RPC};
-use super::tcp::TcpController;
 use super::types::ArcMut;
 
 pub type NetAddr = String;
@@ -27,7 +22,7 @@ pub trait Transport {
 pub struct HttpTransport {
     addr: NetAddr,
     rx: ArcMut<Receiver<RPC>>,
-    tx: ArcMut<Sender<RPC>>,
+    _tx: ArcMut<Sender<RPC>>,
 }
 
 impl Transport for HttpTransport {
@@ -39,7 +34,7 @@ impl Transport for HttpTransport {
         self.rx.clone()
     }
 
-    fn send_msg(&self, from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
+    fn send_msg(&self, _from_addr: NetAddr, _payload: Payload) -> Result<(), NetworkError> {
         Ok(())
     }
 }
@@ -68,7 +63,7 @@ impl Transport for LocalTransport {
         self.addr.to_string()
     }
 
-    fn send_msg(&self, from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
+    fn send_msg(&self, _from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
         let rpc = RPC {
             header: RpcHeader::GetBlock,
             payload,
@@ -109,7 +104,7 @@ where
 impl TransportManager<LocalTransport> {
     pub fn new() -> Self {
         let (tx, rx) = channel::<TcpPeer>();
-        let (tx, rx) = (ArcMut::new(tx), ArcMut::new(rx));
+        let (_tx, _rx) = (ArcMut::new(tx), ArcMut::new(rx));
 
         Self {
             peers: vec![],

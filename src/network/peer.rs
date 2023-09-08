@@ -1,27 +1,15 @@
-use bytes::Buf;
-use log::{debug, error, info, warn};
+use log::{error, info};
 
-use std::io::{BufReader, BufWriter, ErrorKind, Read, Result as IoResult, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
 
-use crate::core::encoding::{ByteDecoding, ByteEncoding};
 use crate::core::util::timestamp;
-use crate::network::error::NetworkError;
-use std::borrow::{BorrowMut, Cow};
-use std::collections::HashMap;
-use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
-use std::ops::Deref;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::net::{SocketAddr, TcpStream};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time;
 
-use super::{
-    message::PeerMessage,
-    rpc::RPC,
-    transport::Transport,
-    types::{ArcMut, NetAddr, Payload},
-};
+use super::{message::PeerMessage, types::ArcMut};
 
 #[derive(Debug)]
 pub enum PeerStreamDirection {
@@ -32,7 +20,7 @@ pub enum PeerStreamDirection {
 pub struct TcpPeer {
     reader: ArcMut<BufReader<TcpStream>>,
     writer: ArcMut<BufWriter<TcpStream>>,
-    direction: PeerStreamDirection,
+    _direction: PeerStreamDirection,
     remote_addr: SocketAddr,
     tcp_controller_tx: Arc<Mutex<Sender<PeerMessage>>>,
     pub last_hb: u64,
@@ -51,7 +39,7 @@ impl TcpPeer {
             remote_addr,
             reader,
             writer,
-            direction,
+            _direction: direction,
             tcp_controller_tx,
             last_hb,
         }

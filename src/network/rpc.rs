@@ -1,7 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use log::info;
 
@@ -16,15 +13,8 @@ use crate::{
 };
 
 use super::{
-    error::NetworkError,
-    message::PeerMessage,
-    node::BlockMiner,
-    tcp::TcpController,
-    transport::{NetAddr, Payload},
-    tx_pool::TxPool,
-    types::ArcMut,
+    error::NetworkError, node::BlockMiner, tcp::TcpController, transport::Payload, tx_pool::TxPool,
 };
-// use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
@@ -90,7 +80,7 @@ impl ByteDecoding for RPC {
             ));
         }
 
-        let buf: [u8; 2] = [data[0], data[1]];
+        let _buf: [u8; 2] = [data[0], data[1]];
 
         // TODO: update RPC header to use from bytes,
         // placeholder is used for now
@@ -106,8 +96,8 @@ impl ByteDecoding for RPC {
 
 pub struct RpcHandler {
     mem_pool: Arc<Mutex<TxPool>>,
-    miner: Arc<Mutex<BlockMiner>>,
-    chain: Arc<Mutex<Blockchain>>,
+    _miner: Arc<Mutex<BlockMiner>>,
+    _chain: Arc<Mutex<Blockchain>>,
     tcp_controller: Arc<Mutex<TcpController>>,
 }
 
@@ -120,8 +110,8 @@ impl RpcHandler {
     ) -> Self {
         Self {
             mem_pool,
-            miner,
-            chain,
+            _miner: miner,
+            _chain: chain,
             tcp_controller,
         }
     }
@@ -133,7 +123,7 @@ impl RpcHandler {
                 let mut mem_pool = lock!(self.mem_pool);
 
                 // TODO: may need to use TcpController to send message back
-                let tcp = lock!(self.tcp_controller);
+                let _tcp = lock!(self.tcp_controller);
                 info!(
                     "RPC received with message: {}",
                     String::from_utf8_lossy(&rpc.payload)

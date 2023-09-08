@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
-use super::{address::Address, error::CryptoError, private_key::PrivateKey, signature::Signature};
+use super::{address::Address, error::CryptoError, signature::Signature};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PublicKey {
@@ -98,6 +98,7 @@ impl Display for PublicKey {
 
 mod test {
     use super::*;
+    use crate::crypto::private_key::PrivateKey;
 
     #[test]
     fn test_public_key() {

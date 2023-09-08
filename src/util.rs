@@ -1,14 +1,7 @@
-use log::error;
 #[macro_export]
 macro_rules! lock {
     ( $mutex_arc:expr ) => {
         $mutex_arc.lock().unwrap()
-        // if let Ok(res) = $mutex_arc.lock() {
-        //     return Ok(res);
-        // } else {
-        //     error!("unable to get lock on mutex");
-        //     return Err("unable to get lock on mutex");
-        // }
     };
 }
 

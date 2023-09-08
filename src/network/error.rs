@@ -17,7 +17,6 @@ impl Display for NetworkError {
             Self::NotFound(msg) => write!(f, "{msg}"),
             Self::Message(msg) => write!(f, "{msg}"),
             Self::Decoding(msg) => write!(f, "{msg}"),
-            _ => write!(f, "Unknown network error"),
         }
     }
 }

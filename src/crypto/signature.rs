@@ -1,10 +1,10 @@
 use ecdsa::Signature as ECDASignature;
-use k256::{Secp256k1, SecretKey, U256};
+use k256::Secp256k1;
 use std::fmt::Display;
 
 use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
-use super::{error::CryptoError, private_key::PrivateKey};
+use super::error::CryptoError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Signature {
@@ -74,6 +74,7 @@ impl Display for Signature {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::crypto::private_key::PrivateKey;
 
     #[test]
     fn test_signature() {

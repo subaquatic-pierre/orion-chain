@@ -1,13 +1,9 @@
 use std::fmt::Display;
 use std::hash::{Hash as StdHash, Hasher};
 
-use ecdsa::elliptic_curve::rand_core;
-use rand::random;
-
 use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
 
 use super::error::CryptoError;
-use super::utils::{random_bytes, random_hash};
 
 #[derive(Clone, Debug, Ord, PartialOrd)]
 pub struct Hash {
@@ -82,7 +78,7 @@ impl HexDecoding for Hash {
     fn from_hex(data: &str) -> Result<Hash, CryptoError> {
         match hex::decode(data) {
             Ok(bytes) => Self::new(&bytes),
-            Err(e) => Err(CryptoError::HashError("unable to decode hash".to_string())),
+            Err(_) => Err(CryptoError::HashError("unable to decode hash".to_string())),
         }
     }
 }
@@ -110,6 +106,7 @@ impl StdHash for Hash {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::crypto::utils::{random_bytes, random_hash};
 
     #[test]
     fn test_hash() {

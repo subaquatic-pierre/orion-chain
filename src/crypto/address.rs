@@ -1,16 +1,7 @@
-use ecdsa::{
-    elliptic_curve::{rand_core::OsRng, NonZeroScalar},
-    signature::{DigestVerifier, Signer, Verifier},
-    Signature as ECDASignature, SigningKey, VerifyingKey,
-};
-use k256::{Secp256k1, SecretKey, U256};
-use sha256::digest;
 use std::ops::Deref;
-use std::{error::Error, fmt::Display};
 
+use super::error::CryptoError;
 use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
-
-use super::{error::CryptoError, private_key::PrivateKey};
 
 pub struct Address {
     inner: [u8; 20],
@@ -85,6 +76,7 @@ impl HexDecoding for Address {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::crypto::{error::CryptoError, private_key::PrivateKey};
 
     #[test]
     fn test_address() {

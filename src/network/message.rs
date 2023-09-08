@@ -1,8 +1,5 @@
 use crate::network::error::NetworkError;
-use std::borrow::{BorrowMut, Cow};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
-
-use super::types::{ArcMut, NetAddr, Payload};
+use std::net::SocketAddr;
 
 #[derive(Debug)]
 pub enum PeerMessage {
@@ -103,6 +100,7 @@ impl PeerMessage {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
     #[test]
     fn test_message_code() {
         let code = MessageCodeMap::RPC;

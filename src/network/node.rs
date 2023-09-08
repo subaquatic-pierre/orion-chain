@@ -6,19 +6,17 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant, SystemTime},
+    time::Instant,
     vec,
 };
 
-use futures_util::lock;
 use log::{error, info};
-use serde::de::Error;
 
 use crate::lock;
 
 use crate::{
     core::{
-        block::{random_block, Block},
+        block::Block,
         blockchain::Blockchain,
         header::{random_header, Header},
         transaction::Transaction,
@@ -30,17 +28,13 @@ use crate::{
 use super::{
     error::NetworkError,
     rpc::{RpcHandler, RpcHeader, RPC},
-    transport::{HttpTransport, LocalTransport, NetAddr, Payload, Transport, TransportManager},
+    transport::{NetAddr, Payload},
     tx_pool::TxPool,
     types::RpcChanMsg,
 };
 use super::{tcp::TcpController, types::ArcMut};
 
-pub struct NodeConfig<T>
-where
-    T: Transport,
-{
-    pub ts_manager: TransportManager<T>,
+pub struct NodeConfig {
     pub block_time: time::Duration,
     pub private_key: Option<PrivateKey>,
 }
@@ -76,7 +70,7 @@ impl BlockMiner {
 pub struct ChainNode {
     tcp_controller: ArcMut<TcpController>,
     rpc_rx: ArcMut<Receiver<RpcChanMsg>>,
-    rpc_tx: ArcMut<Sender<RpcChanMsg>>,
+    _rpc_tx: ArcMut<Sender<RpcChanMsg>>,
     block_time: time::Duration,
     mem_pool: ArcMut<TxPool>,
     miner: ArcMut<BlockMiner>,
@@ -85,7 +79,7 @@ pub struct ChainNode {
 }
 
 impl ChainNode {
-    pub fn new(config: NodeConfig<LocalTransport>, chain: Blockchain) -> Self {
+    pub fn new(config: NodeConfig, chain: Blockchain) -> Self {
         // TODO: create helper function to build ArcMut chanel
         let (tx, rx) = channel::<RpcChanMsg>();
         let (rpc_tx, rpc_rx) = (ArcMut::new(tx), ArcMut::new(rx));
@@ -110,7 +104,7 @@ impl ChainNode {
 
         Self {
             rpc_rx,
-            rpc_tx,
+            _rpc_tx: rpc_tx,
             block_time: config.block_time,
             mem_pool,
             miner,
@@ -122,7 +116,7 @@ impl ChainNode {
 
     // Proxy method for TCP Controller
     // calls TcpController.send_rpc()
-    pub fn send_rpc(&self, from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
+    pub fn send_rpc(&self, _from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
         let tcp = lock!(self.tcp_controller);
         let rpc = RPC {
             header: RpcHeader::GetBlock,

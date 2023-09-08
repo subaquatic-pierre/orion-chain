@@ -1,6 +1,6 @@
 use rand::random;
 
-use super::{error::CryptoError, hash::Hash};
+use super::hash::Hash;
 
 pub fn random_bytes(num_bytes: u32) -> Vec<u8> {
     (0..num_bytes).map(|_| random::<u8>()).collect()

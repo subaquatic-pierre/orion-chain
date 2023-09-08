@@ -15,7 +15,6 @@ impl Display for CryptoError {
             Self::GenerateKey(msg) => write!(f, "{msg}"),
             Self::HashError(msg) => write!(f, "{msg}"),
             Self::SignatureError(msg) => write!(f, "{msg}"),
-            _ => write!(f, "Unknown keypair error"),
         }
     }
 }

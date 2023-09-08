@@ -1,29 +1,24 @@
-use bytes::Buf;
 use log::{debug, error, info, warn};
 
-use std::io::{BufReader, BufWriter, ErrorKind, Read, Result as IoResult, Write};
+use std::io::{BufReader, BufWriter};
 
 use crate::core::encoding::{ByteDecoding, ByteEncoding};
 use crate::core::util::timestamp;
 use crate::lock;
 use crate::network::error::NetworkError;
-use std::borrow::{BorrowMut, Cow};
 use std::collections::HashMap;
-use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
-use std::ops::Deref;
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time;
 
-use super::rpc::RpcHandler;
 use super::types::RpcChanMsg;
 use super::{
     message::PeerMessage,
     peer::{PeerStreamDirection, TcpPeer},
     rpc::RPC,
-    types::{ArcMut, NetAddr, Payload},
+    types::ArcMut,
 };
 
 pub struct TcpController {
@@ -107,7 +102,7 @@ impl TcpController {
     // peers
     fn init_message_receiver(&self) {
         // get data to be used in thread below
-        let node_addr = self.node_addr;
+        let _node_addr = self.node_addr;
         let peers = self.peers.clone();
         let rpc_tx = self.rpc_tx.clone();
         let peer_msg_rx = self.peer_msg_rx.clone();
@@ -157,9 +152,6 @@ impl TcpController {
                                 peer.set_last_hb(ts);
                                 debug!("PONG message received from: {addr}");
                             }
-                        }
-                        msg => {
-                            warn!("unknown message received from peer: {msg:?}")
                         }
                     };
                 }
