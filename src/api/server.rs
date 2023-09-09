@@ -4,10 +4,11 @@ use std::sync::Arc;
 use bytes::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
+use log::{error, info};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use crate::api::util::TokioIo;
+use super::tokio_util::TokioIo;
 use crate::network::node::ChainNode;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -41,7 +42,7 @@ impl ApiServer {
         let addr: SocketAddr = "127.0.0.1:1337".parse().unwrap();
 
         let listener = TcpListener::bind(&addr).await?;
-        println!("Listening on http://{}", addr);
+        info!("client RPC server listening on http://{}", addr);
 
         loop {
             let (stream, _) = listener.accept().await?;
@@ -54,7 +55,7 @@ impl ApiServer {
                 let service = service_fn(|req| router.route_handler(req));
 
                 if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                    println!("Failed to serve connection: {:?}", err);
+                    error!("failed to serve connection: {:?}", err);
                 }
             });
         }

@@ -115,13 +115,13 @@ impl ChainNode {
 
     // Proxy method for TCP Controller
     // calls TcpController.send_rpc()
-    pub fn send_rpc(&self, _from_addr: NetAddr, payload: Payload) -> Result<(), NetworkError> {
+    pub fn send_rpc(&self, peer_addr: SocketAddr, payload: Payload) -> Result<(), NetworkError> {
         let tcp = lock!(self.tcp_controller);
         let rpc = RPC {
             header: RpcHeader::GetBlock,
             payload,
         };
-        tcp.send_rpc(rpc);
+        tcp.send_rpc(peer_addr, &rpc);
 
         Ok(())
     }
@@ -159,10 +159,10 @@ impl ChainNode {
         // Spawn thread to handle message, main RPC handler thread
         thread::spawn(move || {
             let rpc_rx = lock!(rpc_rx);
-            for (_, rpc) in rpc_rx.iter() {
+            for (peer_addr, rpc) in rpc_rx.iter() {
                 let handler = lock!(handler);
 
-                if let Err(e) = handler.handle_rpc(&rpc) {
+                if let Err(e) = handler.handle_rpc(&rpc, Some(peer_addr)) {
                     error!("{e}");
                 }
             }

@@ -7,7 +7,9 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 
 use super::types::ArcRcpHandler;
 
-use super::handlers::{create_tx, get_block, get_tx, not_found};
+use super::handlers::{
+    get_block, get_block_header, get_chain_height, get_last_block, get_tx, new_tx, not_found,
+};
 
 pub struct HttpRouter {
     rpc_handler: ArcRcpHandler,
@@ -22,9 +24,12 @@ impl HttpRouter {
         let rpc_handler = &self.rpc_handler.clone();
         // let chain = &self.node.lock().await.chain;
         match (req.method(), req.uri().path()) {
-            (&Method::POST, "/create-tx") => create_tx(rpc_handler, req).await,
+            (&Method::POST, "/get-chain-height") => get_chain_height(rpc_handler, req).await,
+            (&Method::POST, "/get-last-block") => get_last_block(rpc_handler, req).await,
+            (&Method::POST, "/new-tx") => new_tx(rpc_handler, req).await,
             (&Method::POST, "/get-tx") => get_tx(rpc_handler, req).await,
             (&Method::POST, "/get-block") => get_block(rpc_handler, req).await,
+            (&Method::POST, "/get-block-header") => get_block_header(rpc_handler, req).await,
             _ => not_found().await,
         }
     }

@@ -1,12 +1,17 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use log::info;
 
 use crate::{
+    api::types::GetBlockReq,
     core::{
         block::Block,
         blockchain::Blockchain,
         encoding::{ByteDecoding, ByteEncoding},
+        header::Header,
         transaction::Transaction,
     },
     lock,
@@ -20,9 +25,12 @@ use super::{
 #[repr(u16)]
 pub enum RpcHeader {
     GetBlock = 1,
-    GetTransaction,
+    GetBlockHeader,
+    GetLastBlock,
+    GetChainHeight,
+    GetTx,
+    NewTx,
     NewBlock,
-    NewTransaction,
     Generic,
 }
 
@@ -44,6 +52,7 @@ pub enum RpcHandlerResponse {
     Transaction(Transaction),
     Error(String),
     Generic(String),
+    Header(Header),
 }
 
 #[derive(Debug, Clone)]
@@ -95,9 +104,9 @@ impl ByteDecoding for RPC {
 }
 
 pub struct RpcHandler {
-    mem_pool: Arc<Mutex<TxPool>>,
+    _mem_pool: Arc<Mutex<TxPool>>,
     _miner: Arc<Mutex<BlockMiner>>,
-    _chain: Arc<Mutex<Blockchain>>,
+    chain: Arc<Mutex<Blockchain>>,
     tcp_controller: Arc<Mutex<TcpController>>,
 }
 
@@ -109,34 +118,125 @@ impl RpcHandler {
         tcp_controller: Arc<Mutex<TcpController>>,
     ) -> Self {
         Self {
-            mem_pool,
+            _mem_pool: mem_pool,
             _miner: miner,
-            _chain: chain,
+            chain: chain,
             tcp_controller,
         }
     }
 
-    pub fn handle_rpc(&self, rpc: &RPC) -> Result<RpcHandlerResponse, NetworkError> {
+    pub fn handle_rpc(
+        &self,
+        rpc: &RPC,
+        peer_addr: Option<SocketAddr>,
+    ) -> Result<RpcHandlerResponse, NetworkError> {
         // TODO: handle all RPC header types
+        let tcp = lock!(self.tcp_controller);
+        let payload = rpc.payload.clone();
         match rpc.header {
-            _ => {
-                let mut mem_pool = lock!(self.mem_pool);
-
-                // TODO: may need to use TcpController to send message back
-                let _tcp = lock!(self.tcp_controller);
+            RpcHeader::GetBlock => {
                 info!(
-                    "RPC received with message: {}",
-                    String::from_utf8_lossy(&rpc.payload)
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
                 );
 
-                // check if msg is transaction
-                let tx = Transaction::new(&rpc.payload);
-                // let mut mem_pool = lock!(mem_pool);
-                mem_pool.add(tx);
-                Ok(RpcHandlerResponse::Generic(
-                    "Transaction added to mempool".to_string(),
-                ))
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
+            RpcHeader::GetLastBlock => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::NewBlock => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetChainHeight => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetTx => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::NewTx => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+                if let Some(peer) = peer_addr {
+                    let rpc = RPC {
+                        header: RpcHeader::Generic,
+                        payload: b"RPC payload generic".to_vec(),
+                    };
+                    tcp.send_rpc(peer, &rpc)
+                }
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetBlockHeader => {
+                let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
+
+                let block_id = req.id.parse::<usize>().unwrap();
+
+                let header = self.chain.lock().unwrap().get_header_cloned(block_id);
+
+                if let Some(header) = header {
+                    Ok(RpcHandlerResponse::Header(header))
+                } else {
+                    Ok(RpcHandlerResponse::Generic(format!(
+                        "Block with id: {block_id} not found"
+                    )))
+                }
+            }
+            _ => Ok(RpcHandlerResponse::Generic(
+                "unknown RPC header requested".to_string(),
+            )),
         }
     }
 }

@@ -1,176 +1,240 @@
-use bytes::{Buf, Bytes};
-use http_body_util::{BodyExt, Full};
-use hyper::{body::Incoming as IncomingBody, header, Request, Response, StatusCode};
+use hyper::{body::Incoming as IncomingBody, Request, Response, StatusCode};
+use serde_json::json;
 
-use super::types::{ArcRcpHandler, BoxBody, Result};
-use crate::network::rpc::{RpcHeader, RPC};
+use super::{
+    types::{ArcRcpHandler, BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
+    util::{json_response, parse_body, to_bytes},
+};
+use crate::{
+    core::hasher::Hasher,
+    network::rpc::{RpcHandlerResponse, RpcHeader, RPC},
+};
 
-// async fn client_request_response() -> Result<Response<BoxBody>> {
-//     let req = Request::builder()
-//         .method(Method::POST)
-//         .uri(URL)
-//         .header(header::CONTENT_TYPE, "application/json")
-//         .body(Full::new(Bytes::from(POST_DATA)))
-//         .unwrap();
+pub async fn get_block_header(
+    handler: &ArcRcpHandler,
+    req: Request<IncomingBody>,
+) -> Result<Response<BoxBody>> {
+    let data = parse_body::<GetBlockReq>(req).await;
 
-//     let host = req.uri().host().expect("uri has no host");
-//     let port = req.uri().port_u16().expect("uri has no port");
-//     let stream = TcpStream::connect(format!("{}:{}", host, port)).await?;
-//     let io = TokioIo::new(stream);
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
 
-//     let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
+    let data = data.unwrap();
 
-//     tokio::task::spawn(async move {
-//         if let Err(err) = conn.await {
-//             println!("Connection error: {:?}", err);
-//         }
-//     });
+    let rpc = RPC {
+        header: RpcHeader::GetBlockHeader,
+        payload: to_bytes(&data)?,
+    };
 
-//     let web_res = sender.send_request(req).await?;
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
 
-//     let res_body = web_res.into_body().boxed();
+    let data = match res {
+        RpcHandlerResponse::Header(header) => {
+            let data = json!({
+                "hash":header.hash().to_string(),
+                "prev_hash":header.prev_hash().to_string()
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
 
-//     Ok(Response::new(res_body))
-// }
-
-// pub fn get_chain(node:&Arc<Mutex<ChainNode>>)->
+    json_response(StatusCode::OK, &data).await
+}
 
 pub async fn get_block(
     handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
-    // Aggregate the body...
-    let whole_body = req.collect().await?.aggregate();
-    // Decode as JSON...
-    let mut data: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
-    // Change the JSON...
+    let data = parse_body::<GetBlockReq>(req).await;
+
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
+
+    let data = data.unwrap();
 
     let rpc = RPC {
-        header: RpcHeader::Generic,
-        payload: b"Hello world".to_vec(),
+        header: RpcHeader::GetBlock,
+        payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc)?;
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
 
-    // let block = node
-    //     .lock()
-    //     .await
-    //     .chain
-    //     .lock()
-    //     .unwrap()
-    //     .get_header_cloned(0)
-    //     .unwrap();
+    let data = match res {
+        RpcHandlerResponse::Block(block) => {
+            let data = json!({
+                "hash": block.hash().to_string(),
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
 
-    let block_str = format!("{:?}", res);
-
-    data["test"] = serde_json::Value::from("test_value");
-    data["block"] = serde_json::Value::from(block_str);
-    // And respond with the new JSON.
-    let json = serde_json::to_string(&data)?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(full(json))?;
-    Ok(response)
+    json_response(StatusCode::OK, &data).await
 }
 
 pub async fn get_tx(
-    _rpc_handler: &ArcRcpHandler,
+    handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
-    // Aggregate the body...
-    let whole_body = req.collect().await?.aggregate();
-    // Decode as JSON...
-    let mut data: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
-    // Change the JSON...
+    let data = parse_body::<GetTxReq>(req).await;
 
-    // let block = chain.get_header_cloned(0).unwrap();
-    // let block_str = format!("{:?}", block);
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
 
-    let _random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+    let data = data.unwrap();
 
-    // let node = rpc_handler.lock();
+    let rpc = RPC {
+        header: RpcHeader::GetTx,
+        payload: to_bytes(&data)?,
+    };
 
-    // let rpc = RPC {
-    //     sender: "local".to_string(),
-    //     receiver: "remote".to_string(),
-    //     payload: random_number,
-    // };
-    // node.send_rpc("remote".to_string(), random_number).ok();
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
 
-    data["test"] = serde_json::Value::from("test_value");
-    // data["block"] = serde_json::Value::from(block_str);
-    // And respond with the new JSON.
-    let json = serde_json::to_string(&data)?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(full(json))?;
-    Ok(response)
+    let data = match res {
+        RpcHandlerResponse::Transaction(tx) => {
+            let data = json!({
+                "hash": tx.hash.to_string(),
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
+
+    json_response(StatusCode::OK, &data).await
 }
 
-pub async fn create_tx(
-    _rpc_handler: &ArcRcpHandler,
+pub async fn new_tx(
+    handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
-    // Aggregate the body...
-    let whole_body = req.collect().await?.aggregate();
-    // Decode as JSON...
-    let mut data: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
-    // Change the JSON...
+    let data = parse_body::<NewTxReq>(req).await;
 
-    // let block = chain.get_header_cloned(0).unwrap();
-    // let block_str = format!("{:?}", block);
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
 
-    let _random_number: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+    let data = data.unwrap();
 
-    // let node = rpc_handler.lock();
+    let rpc = RPC {
+        header: RpcHeader::NewTx,
+        payload: to_bytes(&data)?,
+    };
 
-    // let rpc = RPC {
-    //     sender: "local".to_string(),
-    //     receiver: "remote".to_string(),
-    //     payload: random_number,
-    // };
-    // node.send_rpc("remote".to_string(), random_number).ok();
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
 
-    data["test"] = serde_json::Value::from("test_value");
-    // data["block"] = serde_json::Value::from(block_str);
-    // And respond with the new JSON.
-    let json = serde_json::to_string(&data)?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(full(json))?;
-    Ok(response)
+    let data = match res {
+        RpcHandlerResponse::Transaction(tx) => {
+            let data = json!({
+                "hash": tx.hash.to_string(),
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
+
+    json_response(StatusCode::OK, &data).await
 }
 
-// pub async fn api_get_response() -> Result<Response<BoxBody>> {
-//     let data = vec!["foo", "bar"];
-//     let res = match serde_json::to_string(&data) {
-//         Ok(json) => Response::builder()
-//             .header(header::CONTENT_TYPE, "application/json")
-//             .body(full(json))
-//             .unwrap(),
-//         Err(_) => Response::builder()
-//             .status(StatusCode::INTERNAL_SERVER_ERROR)
-//             .body(full(INTERNAL_SERVER_ERROR))
-//             .unwrap(),
-//     };
-//     Ok(res)
-// }
+pub async fn get_last_block(
+    handler: &ArcRcpHandler,
+    req: Request<IncomingBody>,
+) -> Result<Response<BoxBody>> {
+    let data = parse_body::<GenericReq>(req).await;
 
-pub static NOTFOUND: &[u8] = b"Not Found";
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
+
+    let data = data.unwrap();
+
+    let rpc = RPC {
+        header: RpcHeader::GetLastBlock,
+        payload: to_bytes(&data)?,
+    };
+
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+
+    let data = match res {
+        RpcHandlerResponse::Transaction(tx) => {
+            let data = json!({
+                "hash": tx.hash.to_string(),
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
+
+    json_response(StatusCode::OK, &data).await
+}
+
+pub async fn get_chain_height(
+    handler: &ArcRcpHandler,
+    req: Request<IncomingBody>,
+) -> Result<Response<BoxBody>> {
+    let data = parse_body::<GenericReq>(req).await;
+
+    if data.is_err() {
+        return json_response(
+            StatusCode::EXPECTATION_FAILED,
+            &json!({"error": "invalid input fields"}),
+        )
+        .await;
+    }
+
+    let data = data.unwrap();
+
+    let rpc = RPC {
+        header: RpcHeader::GetChainHeight,
+        payload: to_bytes(&data)?,
+    };
+
+    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+
+    let data = match res {
+        RpcHandlerResponse::Transaction(tx) => {
+            let data = json!({
+                "hash": tx.hash.to_string(),
+            });
+            json!({ "data": data })
+        }
+        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        _ => json!({"error":"incorrect response from RPC handler"}),
+    };
+
+    json_response(StatusCode::OK, &data).await
+}
 
 pub async fn not_found() -> Result<Response<BoxBody>> {
+    let data = json!({ "error": "not found" });
     // Return 404 not found response.
-    Ok(Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(full(NOTFOUND))
-        .unwrap())
-}
-
-fn full<T: Into<Bytes>>(chunk: T) -> BoxBody {
-    Full::new(chunk.into())
-        .map_err(|never| match never {})
-        .boxed()
+    json_response(StatusCode::NOT_FOUND, &data).await
 }

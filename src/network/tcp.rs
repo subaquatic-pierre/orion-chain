@@ -79,12 +79,10 @@ impl TcpController {
     }
 
     // pub fn send_rpc(&self, addr: SocketAddr, rpc: RPC) {
-    pub fn send_rpc(&self, rpc: RPC) {
-        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
-            // if let Some(peer) = self.peers.lock().unwrap().get_(&addr) {
+    pub fn send_rpc(&self, addr: SocketAddr, rpc: &RPC) {
+        if let Some(peer) = self.peers.lock().unwrap().get_mut(&addr) {
             let msg = PeerMessage::RPC(self.node_addr, rpc.to_bytes());
             peer.send_msg(&msg);
-            break;
         }
     }
 
