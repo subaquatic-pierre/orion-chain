@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    block::Block,
+    block::{Block, BlockManager},
     error::CoreError,
     header::{Header, HeaderManager},
     storage::Storage,
@@ -14,16 +14,16 @@ use super::{
 };
 
 pub struct Blockchain {
-    store: MemoryStorage,
-    header_manager: HeaderManager,
+    // header_manager: HeaderManager,
+    block_manager: BlockManager,
     validator: BlockValidator,
 }
 
 impl Blockchain {
     pub fn new(genesis_block: Block, validator: BlockValidator) -> Result<Self, CoreError> {
         let mut bc = Self {
-            store: MemoryStorage::new(),
-            header_manager: HeaderManager::new(),
+            // header_manager: HeaderManager::new(),
+            block_manager: BlockManager::new(),
             validator,
         };
 
@@ -39,41 +39,29 @@ impl Blockchain {
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), CoreError> {
-        let headers = &mut self.header_manager;
+        let manager = &mut self.block_manager;
 
-        match self.validator.validate_block(headers, &block) {
-            Ok(_) => {
-                headers.add(block.header().to_owned());
-                self.store.put(&block)
-            }
+        match self.validator.validate_block(manager, &block) {
+            Ok(_) => manager.add(block),
             Err(e) => Err(e),
         }
     }
 
-    pub fn set_validator(&mut self, validator: BlockValidator) {
-        self.validator = validator
-    }
-
     pub fn height(&self) -> usize {
-        let headers = &self.header_manager;
-        headers.height()
+        let manager = &self.block_manager;
+        manager.height()
     }
 
     pub fn has_block(&self, height: usize) -> bool {
         height <= self.height() as usize
     }
 
-    pub fn get_header_cloned(&self, index: usize) -> Option<Header> {
-        let headers = &self.header_manager;
-        let header = match headers.get(index) {
-            Some(h) => h.clone(),
-            None => return None,
-        };
-        Some(header)
+    pub fn get_header(&self, index: usize) -> Option<&Header> {
+        self.block_manager.get_header(index)
     }
 
     pub fn get_prev_block_hash(&self, block_number: usize) -> Option<Hash> {
-        self.get_header_cloned(block_number).map(|h| h.prev_hash())
+        self.get_header(block_number).map(|h| h.prev_hash())
     }
 
     // ---
@@ -81,24 +69,24 @@ impl Blockchain {
     // ---
 
     fn add_block_without_validation(&mut self, block: Block) -> Result<(), CoreError> {
-        let headers = &mut self.header_manager;
-        headers.add(block.header().to_owned());
+        let manager = &mut self.block_manager;
 
         info!(
             "adding new block: height: {}, header_hash:{}",
             block.height(),
             block.header().hash()
         );
+        manager.add(block)
 
-        self.store.put(&block)
+        // self.store.put(&block)
     }
 }
 
 impl Default for Blockchain {
     fn default() -> Self {
         Self {
-            store: MemoryStorage::new(),
-            header_manager: HeaderManager::new(),
+            block_manager: BlockManager::new(),
+            // header_manager: HeaderManager::new(),
             validator: BlockValidator::new(),
         }
     }
@@ -211,6 +199,6 @@ mod test {
 
         let last_block = blocks.last().unwrap();
 
-        assert!(bc.get_header_cloned(last_block.height() as usize).is_some());
+        assert!(bc.get_header(last_block.height() as usize).is_some());
     }
 }

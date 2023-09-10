@@ -9,8 +9,100 @@ use super::{
     error::CoreError,
     hasher::Hasher,
     header::Header,
+    storage::{MemoryStorage, Storage},
     transaction::Transaction,
 };
+#[derive(Clone, Debug)]
+struct HeaderPointer(*const Header);
+
+unsafe impl Send for HeaderPointer {}
+unsafe impl Sync for HeaderPointer {}
+#[derive(Clone, Debug)]
+struct BlockPointer(*const Block);
+
+unsafe impl Send for BlockPointer {}
+unsafe impl Sync for BlockPointer {}
+
+#[derive(Clone, Debug)]
+pub struct BlockManager {
+    blocks: Vec<Block>,
+    store: MemoryStorage,
+}
+
+impl BlockManager {
+    pub fn new() -> Self {
+        Self {
+            blocks: vec![],
+            store: MemoryStorage::new(),
+        }
+    }
+
+    pub fn headers(&self) -> Vec<&Header> {
+        let mut headers = vec![];
+        for block in &self.blocks {
+            headers.push(&block.header);
+        }
+        headers
+    }
+
+    pub fn blocks(&self) -> Vec<&Block> {
+        let mut blocks = vec![];
+        for block in &self.blocks {
+            blocks.push(block);
+        }
+        blocks
+    }
+
+    pub fn add(&mut self, block: Block) -> Result<(), CoreError> {
+        match self.store.put(&block) {
+            Ok(_) => {
+                self.blocks.push(block);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn get_block(&self, index: usize) -> Option<&Block> {
+        self.blocks.get(index)
+    }
+
+    pub fn get_header(&self, index: usize) -> Option<&Header> {
+        if let Some(b) = self.blocks.get(index) {
+            Some(&b.header)
+        } else {
+            None
+        }
+    }
+
+    pub fn last(&self) -> Option<&Block> {
+        self.blocks.last()
+    }
+
+    pub fn has_block(&self, height: usize) -> bool {
+        height <= self.height()
+    }
+
+    pub fn height(&self) -> usize {
+        self.blocks.len() - 1
+    }
+
+    // TODO: implement pointers to be used to get
+    // block by hash and get header by hash
+    // create new HashMaps on manager struct
+    // implement and to and remove from hashmap when adding
+    // or removing blocks
+
+    // pub fn pointers() {
+    // for ptr in &self.headers {
+    //     unsafe {
+    //         let header = &*(ptr.0 as *const Header);
+    //         headers.push(header);
+    //     };
+    // }
+    // headers
+    // }
+}
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -26,13 +118,20 @@ pub struct Block {
 impl Block {
     pub fn new(header: Header, txs: Vec<Transaction>) -> Self {
         let hash = Self::generate_block_hash(&txs);
-        Self {
+        let mut b = Self {
             header,
-            transactions: txs,
+            transactions: vec![],
             signer: None,
             signature: None,
             hash,
+        };
+
+        // TODO: return result if any transaction is invalid
+        for tx in &txs {
+            b.add_transaction(tx.clone()).unwrap();
         }
+
+        b
     }
 
     pub fn header(&self) -> &Header {
@@ -61,16 +160,6 @@ impl Block {
         Ok(())
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) -> Result<(), CoreError> {
-        match tx.verify() {
-            Ok(_) => {
-                self.transactions.push(tx);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     pub fn verify(&self) -> Result<(), CoreError> {
         if self.signature.is_none() {
             return Err(CoreError::Block(
@@ -94,7 +183,6 @@ impl Block {
     }
 
     pub fn hash(&mut self) -> &Hash {
-        // let hashable_bytes = &self.hashable_data();
         &self.hash
     }
 
@@ -106,21 +194,19 @@ impl Block {
         self.header.height() as usize
     }
 
-    // TODO: ENCODE AND DECODE
-    pub fn encode(&self, mut writer: impl Write) -> Result<(), CoreError> {
-        match writer.write_all(&self.header.to_bytes()) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(CoreError::Block(format!("unable to encode block {e}"))),
-        }
-    }
-
-    pub fn decode(_bytes: &[u8]) -> Result<Self, CoreError> {
-        todo!()
-    }
-
     // ---
     // Private Methods
     // ---
+
+    fn add_transaction(&mut self, tx: Transaction) -> Result<(), CoreError> {
+        match tx.verify() {
+            Ok(_) => {
+                self.transactions.push(tx);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
 
     // get sequential bytes of all transactions
     fn txs_bytes(&self) -> Vec<u8> {
@@ -315,27 +401,6 @@ mod test {
     }
 
     #[test]
-    fn add_transaction() {
-        let header = random_header(0, random_hash());
-        // let private_key = PrivateKey::new();
-
-        let mut block = Block::new(header, vec![]);
-
-        // assert error adding unsigned transactions
-        let tx = random_tx();
-        let msg = "transaction has no signature".to_string();
-        let res = match block.add_transaction(tx) {
-            Ok(_) => "wrong".to_string(),
-            Err(e) => e.to_string(),
-        };
-        assert_eq!(res, msg);
-
-        // assert no error adding signed transaction
-        let tx = random_signed_tx();
-        assert!(block.add_transaction(tx).is_ok());
-    }
-
-    #[test]
     fn test_verify_block() {
         let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
@@ -400,6 +465,23 @@ mod test {
 
         let decoded_block = Block::from_bytes(&block_bytes).unwrap();
         assert_eq!(format!("{:?}", block), format!("{:?}", decoded_block));
+    }
+
+    #[test]
+    fn test_header_manager() {
+        let mut manager = BlockManager::new();
+
+        for i in 0..5 {
+            let header = random_header(1, random_hash());
+            let block = random_block(header);
+
+            manager.add(block);
+        }
+
+        let headers = manager.headers();
+        let blocks = manager.blocks();
+
+        assert_eq!(headers.len(), blocks.len());
     }
 }
 

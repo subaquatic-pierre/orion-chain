@@ -224,10 +224,11 @@ impl RpcHandler {
 
                 let block_id = req.id.parse::<usize>().unwrap();
 
-                let header = self.chain.lock().unwrap().get_header_cloned(block_id);
+                let chain = self.chain.lock().unwrap();
+                let header = chain.get_header(block_id);
 
                 if let Some(header) = header {
-                    Ok(RpcHandlerResponse::Header(header))
+                    Ok(RpcHandlerResponse::Header(header.clone()))
                 } else {
                     Ok(RpcHandlerResponse::Generic(format!(
                         "Block with id: {block_id} not found"

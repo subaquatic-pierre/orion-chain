@@ -4,6 +4,7 @@ pub trait Storage {
     fn put(&self, block: &Block) -> Result<(), CoreError>;
 }
 
+#[derive(Clone, Debug)]
 pub struct MemoryStorage {}
 impl MemoryStorage {
     pub fn new() -> Self {
