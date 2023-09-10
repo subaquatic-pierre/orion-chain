@@ -56,6 +56,10 @@ impl Blockchain {
         height <= self.height() as usize
     }
 
+    pub fn last_block(&self) -> Option<&Block> {
+        self.block_manager.last()
+    }
+
     pub fn get_header(&self, index: usize) -> Option<&Header> {
         self.block_manager.get_header(index)
     }

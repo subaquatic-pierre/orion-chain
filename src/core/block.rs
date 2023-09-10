@@ -1,11 +1,14 @@
 use std::io::Write;
 
-use crate::crypto::{
-    hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
+use crate::{
+    api::types::TxsJson,
+    crypto::{hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature},
 };
 
+use crate::api::types::BlockJson;
+
 use super::{
-    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
+    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding, JsonEncoding},
     error::CoreError,
     hasher::Hasher,
     header::Header,
@@ -134,6 +137,14 @@ impl Block {
         b
     }
 
+    pub fn txs(&self) -> Vec<&Transaction> {
+        let mut txs = vec![];
+        for tx in &self.transactions {
+            txs.push(tx)
+        }
+        txs
+    }
+
     pub fn header(&self) -> &Header {
         &self.header
     }
@@ -180,6 +191,10 @@ impl Block {
             }
             None => Err(CoreError::Block("no signer exists for block".to_string())),
         }
+    }
+
+    pub fn prev_hash(&self) -> Hash {
+        self.header.prev_hash()
     }
 
     pub fn hash(&mut self) -> &Hash {
@@ -352,6 +367,32 @@ impl HexDecoding for Block {
                 "unable to parse hex from bytes {e}"
             ))),
         }
+    }
+}
+
+impl JsonEncoding for Block {
+    type Target = BlockJson;
+    fn to_json(&self) -> BlockJson {
+        let txs = self.txs();
+        let tx_hashes = txs.iter().map(|tx| tx.hash().to_string()).collect();
+
+        let txs = TxsJson {
+            count: self.num_txs(),
+            hashes: tx_hashes,
+        };
+
+        let header = self.header();
+
+        let data = BlockJson {
+            version: header.version,
+            height: header.height,
+            hash: self.hash().to_string(),
+            previous_hash: self.prev_hash().to_string(),
+            timestamp: header.timestamp,
+            txs,
+        };
+
+        data
     }
 }
 

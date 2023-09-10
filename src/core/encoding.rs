@@ -1,4 +1,7 @@
+use serde::Serialize;
 use std::error::Error;
+
+use crate::api::types::{BlockJson, TxsJson};
 
 pub trait ByteEncoding {
     fn to_bytes(&self) -> Vec<u8>;
@@ -18,4 +21,9 @@ pub trait HexDecoding {
 
 pub trait HexEncoding {
     fn to_hex(&self) -> String;
+}
+
+pub trait JsonEncoding {
+    type Target: Serialize;
+    fn to_json(&self) -> Self::Target;
 }

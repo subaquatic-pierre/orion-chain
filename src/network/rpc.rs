@@ -48,7 +48,7 @@ impl From<RpcHeader> for u16 {
 
 #[derive(Debug, Clone)]
 pub enum RpcHandlerResponse {
-    Block(Block),
+    Block(Option<Block>),
     Transaction(Transaction),
     Error(String),
     Generic(String),
@@ -89,12 +89,9 @@ impl ByteDecoding for RPC {
             ));
         }
 
-        let _buf: [u8; 2] = [data[0], data[1]];
+        let buf: [u8; 2] = [data[0], data[1]];
 
-        // TODO: update RPC header to use from bytes,
-        // placeholder is used for now
-        let header = RpcHeader::Generic;
-        // let header = RpcHeader::from(u16::from_be_bytes(buf));
+        let header = RpcHeader::from(u16::from_be_bytes(buf));
 
         Ok(RPC {
             header,
@@ -125,10 +122,90 @@ impl RpcHandler {
         }
     }
 
-    pub fn handle_rpc(
+    pub fn handle_client_rpc(&self, rpc: &RPC) -> Result<RpcHandlerResponse, NetworkError> {
+        let chain = lock!(self.chain);
+        // TODO: handle all RPC header types
+        let payload = rpc.payload.clone();
+        match rpc.header {
+            RpcHeader::GetBlock => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetLastBlock => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                let block = chain.last_block();
+
+                if let Some(block) = block {
+                    Ok(RpcHandlerResponse::Block(Some(block.clone())))
+                } else {
+                    Ok(RpcHandlerResponse::Block(None))
+                }
+            }
+            RpcHeader::NewBlock => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetChainHeight => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetTx => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::NewTx => {
+                info!(
+                    "rpc message received with data: {}",
+                    String::from_utf8(payload).unwrap()
+                );
+
+                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+            }
+            RpcHeader::GetBlockHeader => {
+                let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
+
+                let block_id = req.id.parse::<usize>().unwrap();
+
+                let chain = self.chain.lock().unwrap();
+                let header = chain.get_header(block_id);
+
+                if let Some(header) = header {
+                    Ok(RpcHandlerResponse::Header(header.clone()))
+                } else {
+                    Ok(RpcHandlerResponse::Generic(format!(
+                        "Block with id: {block_id} not found"
+                    )))
+                }
+            }
+            _ => Ok(RpcHandlerResponse::Generic(
+                "unknown RPC header requested".to_string(),
+            )),
+        }
+    }
+    pub fn handle_peer_rpc(
         &self,
         rpc: &RPC,
-        peer_addr: Option<SocketAddr>,
+        peer_addr: SocketAddr,
     ) -> Result<RpcHandlerResponse, NetworkError> {
         // TODO: handle all RPC header types
         let tcp = lock!(self.tcp_controller);
@@ -140,13 +217,6 @@ impl RpcHandler {
                     String::from_utf8(payload).unwrap()
                 );
 
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetLastBlock => {
@@ -154,13 +224,7 @@ impl RpcHandler {
                     "rpc message received with data: {}",
                     String::from_utf8(payload).unwrap()
                 );
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
+
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewBlock => {
@@ -168,13 +232,7 @@ impl RpcHandler {
                     "rpc message received with data: {}",
                     String::from_utf8(payload).unwrap()
                 );
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
+
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetChainHeight => {
@@ -182,13 +240,7 @@ impl RpcHandler {
                     "rpc message received with data: {}",
                     String::from_utf8(payload).unwrap()
                 );
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
+
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetTx => {
@@ -196,13 +248,7 @@ impl RpcHandler {
                     "rpc message received with data: {}",
                     String::from_utf8(payload).unwrap()
                 );
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
+
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewTx => {
@@ -210,13 +256,7 @@ impl RpcHandler {
                     "rpc message received with data: {}",
                     String::from_utf8(payload).unwrap()
                 );
-                if let Some(peer) = peer_addr {
-                    let rpc = RPC {
-                        header: RpcHeader::Generic,
-                        payload: b"RPC payload generic".to_vec(),
-                    };
-                    tcp.send_rpc(peer, &rpc)
-                }
+
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetBlockHeader => {

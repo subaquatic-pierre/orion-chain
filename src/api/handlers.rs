@@ -5,7 +5,9 @@ use super::{
     types::{ArcRcpHandler, BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
     util::{json_response, parse_body, to_bytes},
 };
+use crate::core::encoding::JsonEncoding;
 use crate::{
+    api::types::{BlockJson, TxsJson},
     core::hasher::Hasher,
     network::rpc::{RpcHandlerResponse, RpcHeader, RPC},
 };
@@ -31,7 +33,7 @@ pub async fn get_block_header(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Header(header) => {
@@ -69,14 +71,16 @@ pub async fn get_block(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            let data = json!({
-                "hash": block.hash().to_string(),
-            });
-            json!({ "data": data })
+            if let Some(block) = block {
+                let data: BlockJson = block.to_json();
+                json!({ "data": data })
+            } else {
+                json!({ "data": "not block found" })
+            }
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
@@ -106,7 +110,7 @@ pub async fn get_tx(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
@@ -143,7 +147,7 @@ pub async fn new_tx(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
@@ -180,14 +184,16 @@ pub async fn get_last_block(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Transaction(tx) => {
-            let data = json!({
-                "hash": tx.hash.to_string(),
-            });
-            json!({ "data": data })
+        RpcHandlerResponse::Block(block) => {
+            if let Some(block) = block {
+                let data = block.to_json();
+                json!({ "data": data })
+            } else {
+                json!({ "data": "not block found" })
+            }
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
@@ -217,7 +223,7 @@ pub async fn get_chain_height(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_rpc(&rpc, None)?;
+    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {

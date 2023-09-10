@@ -10,11 +10,11 @@ use crate::crypto::{hash::Hash, utils::random_hash};
 
 #[derive(Clone, Debug)]
 pub struct Header {
-    version: u8,
+    pub version: u8,
     data_hash: Hash,
     prev_hash: Hash,
-    height: u64,
-    timestamp: u64,
+    pub height: u64,
+    pub timestamp: u64,
 }
 
 // impl Header {

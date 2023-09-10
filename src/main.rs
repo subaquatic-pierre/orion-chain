@@ -4,6 +4,7 @@ use orion_chain::api::server::ApiServer;
 use orion_chain::core::block::random_block;
 use orion_chain::core::blockchain::Blockchain;
 use orion_chain::core::header::random_header;
+use orion_chain::crypto::hash::Hash;
 use orion_chain::crypto::utils::random_hash;
 
 use orion_chain::logger_init;
@@ -28,7 +29,8 @@ async fn main() -> Result<()> {
     // to be added to the ChainNode to allow for inter peer communication
     // as well as starting the mining/validation loops needed for
     // a functioning blockchain.
-    let block = random_block(random_header(0, random_hash()));
+    let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
+    let block = random_block(random_header(0, genesis_hash));
     let chain = Blockchain::new_with_genesis(block);
 
     // Create a ChainNode with newly created blockchain. ChainNode

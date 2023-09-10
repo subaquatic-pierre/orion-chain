@@ -162,7 +162,7 @@ impl ChainNode {
             for (peer_addr, rpc) in rpc_rx.iter() {
                 let handler = lock!(handler);
 
-                if let Err(e) = handler.handle_rpc(&rpc, Some(peer_addr)) {
+                if let Err(e) = handler.handle_peer_rpc(&rpc, peer_addr) {
                     error!("{e}");
                 }
             }

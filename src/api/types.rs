@@ -10,6 +10,24 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 pub type ArcRcpHandler = Arc<Mutex<RpcHandler>>;
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TxsJson {
+    pub count: usize,
+    pub hashes: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockJson {
+    pub version: u8,
+    pub height: u64,
+    pub hash: String,
+    pub previous_hash: String,
+    pub timestamp: u64,
+    pub txs: TxsJson,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct GetBlockReq {
     pub id: String,
 }
