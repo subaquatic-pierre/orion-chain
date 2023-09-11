@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 
 use super::{
+    block::Block,
     encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
     error::CoreError,
     hasher::Hasher,
@@ -11,18 +12,33 @@ use crate::crypto::{hash::Hash, utils::random_hash};
 #[derive(Clone, Debug)]
 pub struct Header {
     pub version: u8,
-    data_hash: Hash,
+    hash: Hash,
     prev_hash: Hash,
-    pub height: u64,
+    pub height: usize,
     pub timestamp: u64,
 }
 
-// impl Header {
-//     pub fn new(height:u64) -> Self {
-//         Self { version: 1, data_hash: (), prev_hash: (), height: (), timestamp: () }
+impl Header {
+    pub fn new(height: usize, hash: Hash, prev_hash: Hash) -> Self {
+        let now = SystemTime::now();
+        let timestamp = timestamp(now);
+        Self {
+            version: 1,
+            hash,
+            prev_hash,
+            height,
+            timestamp,
+        }
+    }
 
-//     }
-// }
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    pub fn prev_hash(&self) -> Hash {
+        self.prev_hash.clone()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct HeaderManager {
@@ -63,16 +79,6 @@ impl HeaderManager {
     }
 }
 
-impl Header {
-    pub fn height(&self) -> u64 {
-        self.height
-    }
-
-    pub fn prev_hash(&self) -> Hash {
-        self.prev_hash.clone()
-    }
-}
-
 // TODO: Not using Hasher trait
 impl Hasher<Header> for Header {
     fn hash(&self) -> Hash {
@@ -89,7 +95,7 @@ impl ByteDecoding for Header {
         let version = u8::from_be_bytes(data[offset..1].try_into().unwrap());
         offset += 1;
 
-        let data_hash = match Hash::new(&data[offset..offset + 32]) {
+        let hash = match Hash::new(&data[offset..offset + 32]) {
             Ok(hash) => hash,
             Err(e) => return Err(CoreError::Parsing(format!("unable to parse hash {e}"))),
         };
@@ -103,14 +109,14 @@ impl ByteDecoding for Header {
 
         offset += 32;
 
-        let height = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
+        let height = usize::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
         offset += 8;
 
         let timestamp = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
 
         Ok(Self {
             version,
-            data_hash,
+            hash,
             prev_hash,
             height,
             timestamp,
@@ -126,7 +132,7 @@ impl ByteEncoding for Header {
         buf.extend_from_slice(&self.version.to_be_bytes());
 
         // append data hash
-        buf.extend_from_slice(&self.data_hash.to_bytes());
+        buf.extend_from_slice(&self.hash.to_bytes());
 
         // append prev hash
         buf.extend_from_slice(&self.prev_hash.to_bytes());
@@ -149,7 +155,7 @@ impl ByteEncoding for &Header {
         buf.extend_from_slice(&self.version.to_be_bytes());
 
         // append data hash
-        buf.extend_from_slice(&self.data_hash.to_bytes());
+        buf.extend_from_slice(&self.hash.to_bytes());
 
         // append prev hash
         buf.extend_from_slice(&self.prev_hash.to_bytes());
@@ -207,7 +213,7 @@ mod test {
 
         let header_2 = header_2.unwrap();
 
-        assert_eq!(header.data_hash.to_string(), header_2.data_hash.to_string());
+        assert_eq!(header.hash.to_string(), header_2.hash.to_string());
         assert_eq!(header.prev_hash.to_string(), header_2.prev_hash.to_string());
         assert_eq!(header.version, header_2.version);
         assert_eq!(header.timestamp, header_2.timestamp);
@@ -227,7 +233,7 @@ mod test {
 
         let header_2 = header_2.unwrap();
 
-        assert_eq!(header.data_hash.to_string(), header_2.data_hash.to_string());
+        assert_eq!(header.hash.to_string(), header_2.hash.to_string());
         assert_eq!(header.prev_hash.to_string(), header_2.prev_hash.to_string());
         assert_eq!(header.version, header_2.version);
         assert_eq!(header.timestamp, header_2.timestamp);
@@ -235,15 +241,15 @@ mod test {
     }
 }
 
-pub fn random_header(height: u64, prev_hash: Hash) -> Header {
-    let data_hash = random_hash();
+pub fn random_header(height: usize, prev_hash: Hash) -> Header {
+    let hash = random_hash();
     let prev_hash = prev_hash;
     let timestamp = timestamp(SystemTime::now());
     let version = 1;
 
     Header {
         version,
-        data_hash,
+        hash,
         prev_hash,
         height,
         timestamp,

@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use log::info;
+use log::{debug, info};
 
 use crate::{
     api::types::GetBlockReq,
@@ -101,7 +101,7 @@ impl ByteDecoding for RPC {
 }
 
 pub struct RpcHandler {
-    _mem_pool: Arc<Mutex<TxPool>>,
+    mem_pool: Arc<Mutex<TxPool>>,
     _miner: Arc<Mutex<BlockMiner>>,
     chain: Arc<Mutex<Blockchain>>,
     tcp_controller: Arc<Mutex<TcpController>>,
@@ -115,7 +115,7 @@ impl RpcHandler {
         tcp_controller: Arc<Mutex<TcpController>>,
     ) -> Self {
         Self {
-            _mem_pool: mem_pool,
+            mem_pool,
             _miner: miner,
             chain: chain,
             tcp_controller,
@@ -128,18 +128,12 @@ impl RpcHandler {
         let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetLastBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetLastBlock",);
 
                 let block = chain.last_block();
 
@@ -150,36 +144,42 @@ impl RpcHandler {
                 }
             }
             RpcHeader::NewBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::NewBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetChainHeight => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetChainHeight",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetTx => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in RpcHeader::GetTx");
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewTx => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                let tx = Transaction::from_bytes(&payload);
 
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+                match tx {
+                    Ok(tx) => {
+                        if let Ok(mut mem_pool) = self.mem_pool.lock() {
+                            mem_pool.add(tx.clone());
+                            info!(
+                                "adding transaction to the mem_pool in RpcHandler, hash: {}",
+                                tx.hash().to_string()
+                            );
+                            Ok(RpcHandlerResponse::Transaction(tx))
+                        } else {
+                            Ok(RpcHandlerResponse::Generic(
+                                "unable to lock mem_pool in RpcHandler".to_string(),
+                            ))
+                        }
+                    }
+                    Err(e) => Ok(RpcHandlerResponse::Generic(
+                        "unable to handle RpcHeader::NewTx in RpcHandler".to_string(),
+                    )),
+                }
             }
             RpcHeader::GetBlockHeader => {
                 let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
@@ -212,50 +212,32 @@ impl RpcHandler {
         let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetLastBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewBlock => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetChainHeight => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetTx => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewTx => {
-                info!(
-                    "rpc message received with data: {}",
-                    String::from_utf8(payload).unwrap()
-                );
+                debug!("rpc message received in handler at RpcHeader::GetBlock",);
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }

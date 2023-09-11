@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use log::info;
+
 use crate::{
     api::types::TxsJson,
     crypto::{hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature},
@@ -57,6 +59,11 @@ impl BlockManager {
     }
 
     pub fn add(&mut self, block: Block) -> Result<(), CoreError> {
+        info!(
+            "adding block to chain with height: {}, and hash: {}",
+            &block.height(),
+            &block.hash().to_string()
+        );
         match self.store.put(&block) {
             Ok(_) => {
                 self.blocks.push(block);
@@ -153,14 +160,10 @@ impl Block {
         self.transactions.len()
     }
 
-    pub fn sign(&mut self, private_key: PrivateKey) -> Result<(), CoreError> {
+    pub fn sign(&mut self, private_key: &PrivateKey) -> Result<(), CoreError> {
         if self.signer.is_some() | self.signature.is_some() {
             return Err(CoreError::Block("block already has signature".to_string()));
         }
-
-        // if self.hash.is_none() {
-        //     self.hash();
-        // }
 
         let signature = private_key.sign(&self.hashable_data());
         let signer = private_key.pub_key();
@@ -197,7 +200,7 @@ impl Block {
         self.header.prev_hash()
     }
 
-    pub fn hash(&mut self) -> &Hash {
+    pub fn hash(&self) -> &Hash {
         &self.hash
     }
 
@@ -435,7 +438,7 @@ mod test {
 
         let mut block = Block::new(header, vec![]);
 
-        assert!(block.sign(private_key).is_ok());
+        assert!(block.sign(&private_key).is_ok());
 
         assert!(block.signature.is_some());
         assert!(block.signer.is_some());
@@ -448,11 +451,11 @@ mod test {
 
         let mut block = Block::new(header, vec![]);
 
-        assert!(block.sign(private_key).is_ok());
+        assert!(block.sign(&private_key).is_ok());
 
         let private_key = PrivateKey::new();
 
-        assert!(matches!(block.sign(private_key), Err(_)));
+        assert!(matches!(block.sign(&private_key), Err(_)));
 
         assert!(block.verify().is_ok());
 
@@ -475,11 +478,11 @@ mod test {
 
         let mut block = Block::new(header, vec![]);
 
-        assert!(block.sign(private_key).is_ok());
+        assert!(block.sign(&private_key).is_ok());
 
         let private_key = PrivateKey::new();
 
-        assert!(matches!(block.sign(private_key), Err(_)));
+        assert!(matches!(block.sign(&private_key), Err(_)));
 
         assert!(block.verify().is_ok());
 
@@ -534,6 +537,6 @@ pub fn random_signed_block(header: Header) -> Block {
     let mut block = Block::new(header, vec![]);
     let pvt_key = PrivateKey::new();
 
-    block.sign(pvt_key).unwrap();
+    block.sign(&pvt_key).unwrap();
     block
 }

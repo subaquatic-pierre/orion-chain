@@ -39,7 +39,7 @@ impl BlockValidator {
         // check correct prev hash
         let cur_header = block.header();
 
-        if cur_header.prev_hash() != last_header.hash() {
+        if cur_header.prev_hash() != last_header.hash().clone() {
             return Err(CoreError::Block("incorrect previous hash".to_string()));
         }
 

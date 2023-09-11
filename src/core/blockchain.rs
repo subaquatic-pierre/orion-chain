@@ -75,14 +75,7 @@ impl Blockchain {
     fn add_block_without_validation(&mut self, block: Block) -> Result<(), CoreError> {
         let manager = &mut self.block_manager;
 
-        info!(
-            "adding new block: height: {}, header_hash:{}",
-            block.height(),
-            block.header().hash()
-        );
         manager.add(block)
-
-        // self.store.put(&block)
     }
 }
 
@@ -156,7 +149,7 @@ mod test {
         assert_eq!(bc.height(), 1);
 
         let new_height = bc.height() + 1;
-        let new_header_2 = random_header(new_height as u64, new_header.hash());
+        let new_header_2 = random_header(new_height, new_header.hash());
         let new_block_2 = random_signed_block(new_header_2);
 
         assert!(bc.add_block(new_block_2).is_ok());
@@ -180,11 +173,11 @@ mod test {
         let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
 
         let mut headers: Vec<Header> = vec![];
-        let mut prev_header: Header = random_header(1 as u64, genesis_block.hash());
+        let mut prev_header: Header = random_header(1, genesis_block.hash());
         headers.push(prev_header.clone());
 
         for i in 2..50 {
-            let new_header = random_header(i as u64, prev_header.hash());
+            let new_header = random_header(i, prev_header.hash());
             prev_header = new_header.clone();
 
             headers.push(new_header)

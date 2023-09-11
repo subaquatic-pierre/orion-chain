@@ -10,7 +10,7 @@ use std::{
     vec,
 };
 
-use log::{error, info};
+use log::{error, info, warn};
 
 use crate::lock;
 
@@ -41,28 +41,31 @@ pub struct NodeConfig {
 
 pub struct BlockMiner {
     pub last_block_time: Instant,
+    private_key: PrivateKey,
+    pub pool_size: usize,
 }
 
 impl BlockMiner {
-    pub fn new() -> Self {
+    pub fn new(private_key: PrivateKey, pool_size: usize) -> Self {
         Self {
             last_block_time: Instant::now(),
+            private_key,
+            pool_size,
         }
     }
 
     pub fn mine_block(&self, header: Header, txs: Vec<Transaction>) -> Block {
-        // todo!()
-        let block = Block::new(header, txs);
+        let mut block = Block::new(header, txs);
         info!(
             "create new block in MINER {:}, num txs: {}, with height: {}",
             block.hash,
             block.num_txs(),
             block.height()
         );
-        // for &tx in txs {
-        //     block.add_transaction(tx).unwrap();
-        // }
 
+        if let Err(e) = block.sign(&self.private_key) {
+            warn!("unable to sign block in miner: {e}")
+        }
         block
     }
 }
@@ -70,7 +73,7 @@ impl BlockMiner {
 pub struct ChainNode {
     tcp_controller: ArcMut<TcpController>,
     rpc_rx: ArcMut<Receiver<RpcChanMsg>>,
-    _rpc_tx: ArcMut<Sender<RpcChanMsg>>,
+    rpc_tx: ArcMut<Sender<RpcChanMsg>>,
     block_time: time::Duration,
     mem_pool: ArcMut<TxPool>,
     miner: ArcMut<BlockMiner>,
@@ -89,7 +92,12 @@ impl ChainNode {
         let tcp_controller = TcpController::new(addr, rpc_tx.clone()).unwrap();
 
         let tcp_controller = ArcMut::new(tcp_controller);
-        let miner = ArcMut::new(BlockMiner::new());
+
+        // TODO: get private key from config
+        // TODO: get pool size from config
+        let pk = PrivateKey::new();
+        let miner = ArcMut::new(BlockMiner::new(pk, 50));
+
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
 
@@ -103,7 +111,7 @@ impl ChainNode {
 
         Self {
             rpc_rx,
-            _rpc_tx: rpc_tx,
+            rpc_tx,
             block_time: config.block_time,
             mem_pool,
             miner,
@@ -149,6 +157,10 @@ impl ChainNode {
         self.rpc_handler.clone()
     }
 
+    pub fn rpc_tx(&self) -> Arc<Mutex<Sender<RpcChanMsg>>> {
+        self.rpc_tx.clone()
+    }
+
     // ---
     // Private Methods
     // ---
@@ -173,6 +185,7 @@ impl ChainNode {
         let block_time = self.block_time;
         let miner = self.miner.clone();
         let mem_pool = self.mem_pool.clone();
+        let chain = self.chain.clone();
 
         // TODO: check if ChainNode has block miner
         // spawn mining thread if exists
@@ -183,15 +196,30 @@ impl ChainNode {
                 // miner takes transactions from mem pool on each block duration
                 let mut miner = lock!(miner);
                 if let Ok(mut pool) = mem_pool.lock() {
-                    let txs = pool.take(2);
+                    let pool_size = miner.pool_size;
+                    let txs = pool.take(pool_size);
 
-                    let header = random_header(1, random_hash());
+                    if let Ok(mut chain) = chain.lock() {
+                        if let Some(last_block) = chain.last_block() {
+                            let height = chain.height() + 1;
+                            let prev_hash = last_block.hash().clone();
+                            let hash = Block::generate_block_hash(&txs);
+                            let header = Header::new(height, hash, prev_hash);
 
-                    // if !txs.is_empty() {
-                    // get block from miner
-                    miner.mine_block(header, txs);
+                            // if !txs.is_empty() {
+                            // get block from miner
+                            let block = miner.mine_block(header, txs);
 
-                    // add block to blockchain
+                            // add block to blockchain
+                            if let Err(e) = chain.add_block(block) {
+                                warn!("unable to add block in Node::spawn_miner_thread: {e}");
+                            }
+                        } else {
+                            warn!("unable to get last block chain in Node::spawn_miner_thread");
+                        }
+                    } else {
+                        warn!("unable to lock chain in Node::spawn_miner_thread");
+                    }
 
                     // broadcast added block
 

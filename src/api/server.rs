@@ -1,14 +1,19 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
+
+use std::thread;
+use std::time;
 
 use bytes::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use log::{error, info};
+use log::{error, info, warn};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 use super::tokio_util::TokioIo;
+use crate::core::block::random_signed_block;
+use crate::lock;
 use crate::network::node::ChainNode;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -24,7 +29,7 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 use super::router::HttpRouter;
 
 pub struct ApiServer {
-    _node: ChainNode,
+    _node: Arc<Mutex<ChainNode>>,
     router: Arc<Mutex<HttpRouter>>,
 }
 
@@ -32,6 +37,7 @@ impl ApiServer {
     pub fn new(node: ChainNode) -> Self {
         let router = Arc::new(Mutex::new(HttpRouter::new(node.rpc_handler())));
 
+        let node = Arc::new(Mutex::new(node));
         Self {
             _node: node,
             router,

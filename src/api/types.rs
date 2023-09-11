@@ -20,7 +20,7 @@ pub struct TxsJson {
 #[serde(rename_all = "camelCase")]
 pub struct BlockJson {
     pub version: u8,
-    pub height: u64,
+    pub height: usize,
     pub hash: String,
     pub previous_hash: String,
     pub timestamp: u64,

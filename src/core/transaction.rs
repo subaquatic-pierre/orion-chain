@@ -1,5 +1,6 @@
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
+    utils::random_bytes,
 };
 
 use super::{
@@ -361,7 +362,8 @@ mod test {
 }
 
 pub fn random_tx() -> Transaction {
-    Transaction::new(&[1, 2, 3])
+    let bytes = random_bytes(8);
+    Transaction::new(&bytes)
 }
 
 pub fn random_signed_tx() -> Transaction {
