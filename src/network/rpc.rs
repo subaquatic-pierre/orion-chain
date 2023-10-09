@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::{
-    error::NetworkError, node::BlockMiner, tcp::TcpController, transport::Payload, tx_pool::TxPool,
+    error::NetworkError, node::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -48,7 +48,7 @@ impl From<RpcHeader> for u16 {
 
 #[derive(Debug, Clone)]
 pub enum RpcHandlerResponse {
-    Block(Option<Block>),
+    Block(Block),
     Transaction(Transaction),
     Error(String),
     Generic(String),
@@ -123,33 +123,31 @@ impl RpcHandler {
     }
 
     pub fn handle_client_rpc(&self, rpc: &RPC) -> Result<RpcHandlerResponse, NetworkError> {
-        let chain = lock!(self.chain);
         // TODO: handle all RPC header types
         let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+                debug!("rpc message received in handler at RpcHeader::GetBlock");
+                match self.get_block(&payload) {
+                    Ok(block) => Ok(RpcHandlerResponse::Block(block.clone())),
+                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
+                }
             }
             RpcHeader::GetLastBlock => {
-                debug!("rpc message received in handler at RpcHeader::GetLastBlock",);
+                debug!("rpc message received in handler at RpcHeader::GetLastBlock");
 
-                let block = chain.last_block();
-
-                if let Some(block) = block {
-                    Ok(RpcHandlerResponse::Block(Some(block.clone())))
-                } else {
-                    Ok(RpcHandlerResponse::Block(None))
+                match self.get_last_block() {
+                    Ok(block) => Ok(RpcHandlerResponse::Block(block.clone())),
+                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
                 }
             }
             RpcHeader::NewBlock => {
-                debug!("rpc message received in handler at RpcHeader::NewBlock",);
+                debug!("rpc message received in handler at RpcHeader::NewBlock");
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::GetChainHeight => {
-                debug!("rpc message received in handler at RpcHeader::GetChainHeight",);
+                debug!("rpc message received in handler at RpcHeader::GetChainHeight");
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
@@ -159,42 +157,18 @@ impl RpcHandler {
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
             RpcHeader::NewTx => {
-                let tx = Transaction::from_bytes(&payload);
+                debug!("rpc message received in handler at RpcHeader::NewTx");
 
-                match tx {
-                    Ok(tx) => {
-                        if let Ok(mut mem_pool) = self.mem_pool.lock() {
-                            mem_pool.add(tx.clone());
-                            info!(
-                                "adding transaction to the mem_pool in RpcHandler, hash: {}",
-                                tx.hash().to_string()
-                            );
-                            Ok(RpcHandlerResponse::Transaction(tx))
-                        } else {
-                            Ok(RpcHandlerResponse::Generic(
-                                "unable to lock mem_pool in RpcHandler".to_string(),
-                            ))
-                        }
-                    }
-                    Err(e) => Ok(RpcHandlerResponse::Generic(
-                        "unable to handle RpcHeader::NewTx in RpcHandler".to_string(),
-                    )),
+                match self.new_tx(&payload) {
+                    Ok(tx) => Ok(RpcHandlerResponse::Transaction(tx)),
+                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
                 }
             }
             RpcHeader::GetBlockHeader => {
-                let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
-
-                let block_id = req.id.parse::<usize>().unwrap();
-
-                let chain = self.chain.lock().unwrap();
-                let header = chain.get_header(block_id);
-
-                if let Some(header) = header {
-                    Ok(RpcHandlerResponse::Header(header.clone()))
-                } else {
-                    Ok(RpcHandlerResponse::Generic(format!(
-                        "Block with id: {block_id} not found"
-                    )))
+                debug!("rpc message received in handler at RpcHeader::GetBlockHeader");
+                match self.get_block_header(&payload) {
+                    Ok(header) => Ok(RpcHandlerResponse::Header(header.clone())),
+                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
                 }
             }
             _ => Ok(RpcHandlerResponse::Generic(
@@ -202,6 +176,7 @@ impl RpcHandler {
             )),
         }
     }
+
     pub fn handle_peer_rpc(
         &self,
         rpc: &RPC,
@@ -212,9 +187,11 @@ impl RpcHandler {
         let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
+                debug!("rpc message received in peer handler at RpcHeader::GetBlock");
+                match self.get_block(&payload) {
+                    Ok(block) => Ok(RpcHandlerResponse::Block(block.clone())),
+                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
+                }
             }
             RpcHeader::GetLastBlock => {
                 debug!("rpc message received in handler at RpcHeader::GetBlock",);
@@ -241,25 +218,93 @@ impl RpcHandler {
 
                 Ok(RpcHandlerResponse::Generic(format!("Generic response")))
             }
-            RpcHeader::GetBlockHeader => {
-                let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
-
-                let block_id = req.id.parse::<usize>().unwrap();
-
-                let chain = self.chain.lock().unwrap();
-                let header = chain.get_header(block_id);
-
-                if let Some(header) = header {
-                    Ok(RpcHandlerResponse::Header(header.clone()))
-                } else {
-                    Ok(RpcHandlerResponse::Generic(format!(
-                        "Block with id: {block_id} not found"
-                    )))
-                }
-            }
             _ => Ok(RpcHandlerResponse::Generic(
                 "unknown RPC header requested".to_string(),
             )),
+        }
+    }
+
+    // ---
+    // Private methods
+    // ---
+
+    fn get_block(&self, payload: &Vec<u8>) -> Result<Block, NetworkError> {
+        let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
+        let chain = lock!(self.chain);
+
+        if req.hash.is_none() && req.height.is_none() {
+            return Err(NetworkError::RPC(format!(
+                "Incorrect request, must request with height or hash"
+            )));
+        }
+
+        let block = if let Some(height) = &req.height {
+            let block_id = height.parse::<usize>().unwrap();
+
+            chain.get_block(block_id)
+        } else {
+            let hash = req.hash.clone();
+            let hash = hash.unwrap();
+
+            chain.get_block_by_hash(&hash)
+        };
+
+        if let Some(block) = block {
+            Ok(block.clone())
+        } else {
+            if let Some(height) = req.height {
+                return Err(NetworkError::RPC(format!(
+                    "Block with height: {height} not found"
+                )));
+            } else {
+                let hash = req.hash.unwrap();
+                return Err(NetworkError::RPC(format!(
+                    "Block with hash: {hash} not found"
+                )));
+            }
+        }
+    }
+
+    fn get_block_header(&self, payload: &Vec<u8>) -> Result<Header, NetworkError> {
+        match self.get_block(payload) {
+            Ok(block) => return Ok(block.header().clone()),
+            Err(msg) => Err(NetworkError::RPC(msg.to_string())),
+        }
+    }
+
+    fn get_last_block(&self) -> Result<Block, NetworkError> {
+        let chain = lock!(self.chain);
+
+        let block = chain.last_block();
+
+        if let Some(block) = block {
+            Ok(block.clone())
+        } else {
+            Err(NetworkError::RPC(format!("Last block not found")))
+        }
+    }
+
+    fn new_tx(&self, payload: &Vec<u8>) -> Result<Transaction, NetworkError> {
+        let tx = Transaction::from_bytes(&payload);
+
+        match tx {
+            Ok(tx) => {
+                if let Ok(mut mem_pool) = self.mem_pool.lock() {
+                    mem_pool.add(tx.clone());
+                    debug!(
+                        "adding transaction to the mem_pool in RpcHandler, hash: {}",
+                        tx.hash().to_string()
+                    );
+                    Ok(tx)
+                } else {
+                    Err(NetworkError::RPC(
+                        "unable to lock mem_pool in RpcHandler".to_string(),
+                    ))
+                }
+            }
+            Err(e) => Err(NetworkError::RPC(format!(
+                "unable to handle RpcHeader::NewTx in RpcHandler, {e}"
+            ))),
         }
     }
 }

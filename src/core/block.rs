@@ -77,6 +77,11 @@ impl BlockManager {
         self.blocks.get(index)
     }
 
+    pub fn get_block_by_hash(&self, index: &str) -> Option<&Block> {
+        // TODO: implement get block by hash
+        self.blocks.get(0)
+    }
+
     pub fn get_header(&self, index: usize) -> Option<&Header> {
         if let Some(b) = self.blocks.get(index) {
             Some(&b.header)

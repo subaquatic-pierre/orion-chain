@@ -29,7 +29,8 @@ pub struct BlockJson {
 
 #[derive(Serialize, Deserialize)]
 pub struct GetBlockReq {
-    pub id: String,
+    pub height: Option<String>,
+    pub hash: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

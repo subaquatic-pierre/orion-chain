@@ -6,6 +6,7 @@ pub enum NetworkError {
     NotFound(String),
     Message(String),
     Decoding(String),
+    RPC(String),
 }
 
 impl Error for NetworkError {}
@@ -17,6 +18,7 @@ impl Display for NetworkError {
             Self::NotFound(msg) => write!(f, "{msg}"),
             Self::Message(msg) => write!(f, "{msg}"),
             Self::Decoding(msg) => write!(f, "{msg}"),
+            Self::RPC(msg) => write!(f, "{msg}"),
         }
     }
 }

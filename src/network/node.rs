@@ -28,9 +28,8 @@ use crate::{
 use super::{
     error::NetworkError,
     rpc::{RpcHandler, RpcHeader, RPC},
-    transport::{NetAddr, Payload},
     tx_pool::TxPool,
-    types::RpcChanMsg,
+    types::{Payload, RpcChanMsg},
 };
 use super::{tcp::TcpController, types::ArcMut};
 

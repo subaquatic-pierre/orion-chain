@@ -86,9 +86,15 @@ impl TcpController {
         }
     }
 
-    pub fn broadcast(&self, msg: &PeerMessage) {
-        for (_, peer) in self.peers.lock().as_mut().unwrap().iter_mut() {
-            peer.send_msg(msg);
+    pub fn broadcast(&self, rpc: &RPC, ignore_addr: Option<SocketAddr>) {
+        for addr in self.peers.lock().unwrap().keys() {
+            // Skip current peer address if ignore address is set
+            if let Some(ignore_addr) = ignore_addr {
+                if ignore_addr == *addr {
+                    continue;
+                }
+            }
+            self.send_rpc(*addr, rpc);
         }
     }
 
@@ -125,7 +131,7 @@ impl TcpController {
                                 Ok(rpc) => {
                                     // Send message back to ChainNode
                                     if let Err(e) = lock!(rpc_tx).send((addr, rpc)) {
-                                        error!("error sending message on RPC chanel from TCPController: {e}");
+                                        error!("error sending message on RPC chanel from TCPController: {e}, to ChainNode");
                                     };
                                 }
                                 Err(e) => {

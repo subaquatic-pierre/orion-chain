@@ -75,12 +75,7 @@ pub async fn get_block(
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            if let Some(block) = block {
-                let data: BlockJson = block.to_json();
-                json!({ "data": data })
-            } else {
-                json!({ "data": "not block found" })
-            }
+            json!({ "data": block.to_json() })
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
@@ -188,12 +183,8 @@ pub async fn get_last_block(
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            if let Some(block) = block {
-                let data = block.to_json();
-                json!({ "data": data })
-            } else {
-                json!({ "data": "not block found" })
-            }
+            let data = block.to_json();
+            json!({ "data": data })
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
