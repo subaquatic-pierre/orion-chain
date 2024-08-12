@@ -1,4 +1,5 @@
 use hyper::{body::Incoming as IncomingBody, Request, Response, StatusCode};
+use log::debug;
 use serde_json::json;
 
 use super::{
@@ -136,6 +137,8 @@ pub async fn new_tx(
     }
 
     let data = data.unwrap();
+
+    debug!("NEW TX REQ :{data:?}",);
 
     let rpc = RPC {
         header: RpcHeader::NewTx,

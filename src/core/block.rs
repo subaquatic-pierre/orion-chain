@@ -77,7 +77,7 @@ impl BlockManager {
         self.blocks.get(index)
     }
 
-    pub fn get_block_by_hash(&self, index: &str) -> Option<&Block> {
+    pub fn get_block_by_hash(&self, hash: &str) -> Option<&Block> {
         // TODO: implement get block by hash
         self.blocks.get(0)
     }

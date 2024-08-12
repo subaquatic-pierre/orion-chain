@@ -1,3 +1,5 @@
+use bincode::config::BigEndian;
+use bincode::Options;
 use bytes::Buf;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -43,7 +45,9 @@ pub fn to_bytes<T>(data: &T) -> StdResult<Vec<u8>, CoreError>
 where
     T: ?Sized + Serialize,
 {
-    match bincode::serialize(data) {
+    let encoder = bincode::DefaultOptions::new().with_big_endian();
+
+    match encoder.serialize(data) {
         Ok(b) => Ok(b),
         Err(e) => Err(CoreError::Parsing(e.to_string())),
     }

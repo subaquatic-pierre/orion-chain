@@ -9,5 +9,8 @@ build:
 run: 
 	cargo run
 
+dev:
+	cargo watch -x "run --bin orion-chain" 
+
 test:
 	cargo test -- --nocapture

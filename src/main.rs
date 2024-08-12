@@ -44,8 +44,8 @@ async fn main() -> Result<()> {
     let mut chain_node = ChainNode::new(config, chain);
     chain_node.start()?;
 
-    let handler = chain_node.rpc_handler();
-    transaction_tester_thread(handler);
+    // let handler = chain_node.rpc_handler();
+    // transaction_tester_thread(handler);
 
     // Create main entry point for HTTP API server for the node,
     // pass in Arc of ChainNode to access blockchain functionality

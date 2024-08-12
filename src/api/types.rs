@@ -27,13 +27,13 @@ pub struct BlockJson {
     pub txs: TxsJson,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GetBlockReq {
     pub height: Option<String>,
     pub hash: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NewTxReq {
     pub value: String,
 }

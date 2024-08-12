@@ -1,9 +1,11 @@
 use std::{
+    fmt::Debug,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
 
 use log::{debug, info};
+use serde::Serialize;
 
 use crate::{
     api::types::GetBlockReq,

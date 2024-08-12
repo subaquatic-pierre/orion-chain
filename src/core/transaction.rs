@@ -1,3 +1,5 @@
+use log::{debug, info};
+
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
     utils::random_bytes,
@@ -135,6 +137,9 @@ impl ByteDecoding for Transaction {
         // get length of data bytes
         let data_len: usize = usize::from_be_bytes(data[0..8].try_into().unwrap());
 
+        let first = data[0..8].to_vec();
+
+        debug!("data data[0..8], :{:?} data_len: {data_len:?}", first);
         // hold offset for data bytes,
         // will be used as index for signature start
         let mut offset = 8 + data_len;
@@ -150,7 +155,9 @@ impl ByteDecoding for Transaction {
             // data_index += 1;
         }
 
-        let hash = Hash::from_bytes(&data[offset..offset + 32]);
+        // info!("{data:?}");
+
+        let hash = Hash::from_bytes(&data_buf[offset..offset + 32]);
 
         if hash.is_err() {
             return Err(CoreError::Transaction("unable to parse hash".to_string()));
