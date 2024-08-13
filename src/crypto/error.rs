@@ -1,10 +1,13 @@
 use std::{error::Error, fmt::Display};
 
+use crate::core::error::CoreError;
+
 #[derive(Debug)]
 pub enum CryptoError {
     GenerateKey(String),
     HashError(String),
     SignatureError(String),
+    CoreError(String),
 }
 
 impl Error for CryptoError {}
@@ -12,9 +15,13 @@ impl Error for CryptoError {}
 impl Display for CryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::GenerateKey(msg) => write!(f, "{msg}"),
-            Self::HashError(msg) => write!(f, "{msg}"),
-            Self::SignatureError(msg) => write!(f, "{msg}"),
+            msg => write!(f, "{msg}"),
         }
+    }
+}
+
+impl From<CoreError> for CryptoError {
+    fn from(value: CoreError) -> Self {
+        CryptoError::CoreError(value.to_string())
     }
 }

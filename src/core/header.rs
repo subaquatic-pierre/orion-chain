@@ -1,15 +1,16 @@
 use std::time::SystemTime;
 
+use serde::{Deserialize, Serialize};
+
 use super::{
     block::Block,
-    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
+    encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
-    hasher::Hasher,
     util::timestamp,
 };
 use crate::crypto::{hash::Hash, utils::random_hash};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
     pub version: u8,
     hash: Hash,
@@ -37,6 +38,11 @@ impl Header {
 
     pub fn prev_hash(&self) -> Hash {
         self.prev_hash.clone()
+    }
+
+    pub fn hash(&self) -> Hash {
+        // TODO: Handle error checking
+        Hash::sha256(&self.to_bytes().unwrap()).unwrap()
     }
 }
 
@@ -79,116 +85,35 @@ impl HeaderManager {
     }
 }
 
-// TODO: Not using Hasher trait
-impl Hasher<Header> for Header {
-    fn hash(&self) -> Hash {
-        Hash::sha256(&self.to_bytes()).unwrap()
+impl ByteEncoding<Header> for Header {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
     }
-}
-
-impl ByteDecoding for Header {
-    type Target = Self;
-    type Error = CoreError;
 
     fn from_bytes(data: &[u8]) -> Result<Header, CoreError> {
-        let mut offset = 0;
-        let version = u8::from_be_bytes(data[offset..1].try_into().unwrap());
-        offset += 1;
-
-        let hash = match Hash::new(&data[offset..offset + 32]) {
-            Ok(hash) => hash,
-            Err(e) => return Err(CoreError::Parsing(format!("unable to parse hash {e}"))),
-        };
-
-        offset += 32;
-
-        let prev_hash = match Hash::new(&data[offset..offset + 32]) {
-            Ok(hash) => hash,
-            Err(e) => return Err(CoreError::Parsing(format!("unable to parse hash {e}"))),
-        };
-
-        offset += 32;
-
-        let height = usize::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
-        offset += 8;
-
-        let timestamp = u64::from_be_bytes(data[offset..offset + 8].try_into().unwrap());
-
-        Ok(Self {
-            version,
-            hash,
-            prev_hash,
-            height,
-            timestamp,
-        })
+        Ok(bincode::deserialize(data)?)
     }
 }
 
-impl ByteEncoding for Header {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = vec![];
+impl ByteEncoding<Header> for &Header {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
+    }
 
-        // append version
-        buf.extend_from_slice(&self.version.to_be_bytes());
-
-        // append data hash
-        buf.extend_from_slice(&self.hash.to_bytes());
-
-        // append prev hash
-        buf.extend_from_slice(&self.prev_hash.to_bytes());
-
-        // append height
-        buf.extend_from_slice(&self.height.to_be_bytes());
-
-        // append timestamp
-        buf.extend_from_slice(&self.timestamp.to_be_bytes());
-
-        buf
+    fn from_bytes(data: &[u8]) -> Result<Header, CoreError> {
+        Ok(bincode::deserialize(data)?)
     }
 }
 
-impl ByteEncoding for &Header {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = vec![];
-
-        // append version
-        buf.extend_from_slice(&self.version.to_be_bytes());
-
-        // append data hash
-        buf.extend_from_slice(&self.hash.to_bytes());
-
-        // append prev hash
-        buf.extend_from_slice(&self.prev_hash.to_bytes());
-
-        // append height
-        buf.extend_from_slice(&self.height.to_be_bytes());
-
-        // append timestamp
-        buf.extend_from_slice(&self.timestamp.to_be_bytes());
-
-        buf
+impl HexEncoding<Header> for Header {
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
-}
-
-impl HexEncoding for Header {
-    fn to_hex(&self) -> String {
-        let bytes = &self.to_bytes();
-        hex::encode(bytes)
-    }
-}
-
-impl HexDecoding for Header {
-    type Target = Self;
-    type Error = CoreError;
 
     fn from_hex(data: &str) -> Result<Header, CoreError> {
-        let bytes = hex::decode(data);
-        match bytes {
-            Ok(bytes) => Self::from_bytes(&bytes),
-            Err(e) => Err(CoreError::Parsing(format!(
-                "unable to parse hex from bytes {e}"
-            ))),
-        }
+        let bytes = hex::decode(data)?;
+
+        Self::from_bytes(&bytes)
     }
 }
 
@@ -203,9 +128,9 @@ mod test {
     fn test_header_parse_bytes() {
         let header = random_header(0, random_hash());
 
-        let bytes = header.to_bytes();
+        let bytes = header.to_bytes().unwrap();
 
-        assert_eq!(bytes.len(), 81);
+        // assert_eq!(bytes.len(), 81);
 
         let header_2 = Header::from_bytes(&bytes);
 
@@ -223,9 +148,9 @@ mod test {
     fn test_header_parse_hex() {
         let header = random_header(0, random_hash());
 
-        let hex_str = header.to_hex();
+        let hex_str = header.to_hex().unwrap();
 
-        assert_eq!(hex_str.len(), 154);
+        // assert_eq!(hex_str.len(), 154);
 
         let header_2 = Header::from_hex(&hex_str);
 

@@ -1,7 +1,6 @@
 use super::{
     block::{Block, BlockManager},
     error::CoreError,
-    hasher::Hasher,
     header::HeaderManager,
 };
 

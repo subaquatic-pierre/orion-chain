@@ -1,29 +1,19 @@
-use serde::Serialize;
-use std::error::Error;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-use crate::api::types::{BlockJson, TxsJson};
+use super::error::CoreError;
 
-pub trait ByteEncoding {
-    fn to_bytes(&self) -> Vec<u8>;
-}
-pub trait ByteDecoding {
-    type Target;
-    type Error: Error;
-    fn from_bytes(data: &[u8]) -> Result<Self::Target, Self::Error>;
+pub trait ByteEncoding<T> {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError>;
+    fn from_bytes(data: &[u8]) -> Result<T, CoreError>;
 }
 
-pub trait HexDecoding {
-    type Target;
-    type Error: Error;
-
-    fn from_hex(data: &str) -> Result<Self::Target, Self::Error>;
+pub trait HexEncoding<T> {
+    fn to_hex(&self) -> Result<String, CoreError>;
+    fn from_hex(data: &str) -> Result<T, CoreError>;
 }
 
-pub trait HexEncoding {
-    fn to_hex(&self) -> String;
-}
-
-pub trait JsonEncoding {
-    type Target: Serialize;
-    fn to_json(&self) -> Self::Target;
+pub trait JsonEncoding<T> {
+    fn to_json(&self) -> Result<Value, CoreError>;
+    fn from_json(data: Value) -> Result<T, CoreError>;
 }

@@ -1,22 +1,24 @@
 use std::{
-    io::{Error, Read, Write},
+    io::{self, Error, Read, Write},
     net::TcpStream,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::core::{
-    block::Block,
-    encoding::{ByteDecoding, ByteEncoding},
-    error::CoreError,
-    transaction::Transaction,
+    block::Block, encoding::ByteEncoding, error::CoreError, transaction::Transaction,
 };
 
-pub trait Encoder<T: ByteEncoding> {
+pub trait Encoder<T>
+where
+    T: ByteEncoding<T>,
+{
     fn encode(&mut self, data: &T) -> Result<(), Error>;
 }
 
 pub trait Decoder<T>
 where
-    T: ByteDecoding<Target = T, Error = CoreError>,
+    T: ByteEncoding<T>,
 {
     fn decode(&mut self) -> Result<T, Error>;
 }
@@ -41,7 +43,12 @@ impl BlockEncoder<VecBuf> {
 
 impl Encoder<Block> for BlockEncoder<VecBuf> {
     fn encode(&mut self, data: &Block) -> Result<(), Error> {
-        self.writer.write_all(&data.to_bytes())
+        let bytes = match data.to_bytes() {
+            Ok(b) => b,
+            Err(e) => return Err(Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        self.writer.write_all(&bytes)
     }
 }
 
@@ -57,7 +64,12 @@ impl BlockEncoder<TcpStream> {
 
 impl Encoder<Block> for BlockEncoder<TcpStream> {
     fn encode(&mut self, data: &Block) -> Result<(), Error> {
-        self.writer.write_all(&data.to_bytes())
+        let bytes = match data.to_bytes() {
+            Ok(b) => b,
+            Err(e) => return Err(Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        self.writer.write_all(&bytes)
     }
 }
 
@@ -132,7 +144,12 @@ impl TxEncoder<VecBuf> {
 
 impl Encoder<Transaction> for TxEncoder<VecBuf> {
     fn encode(&mut self, data: &Transaction) -> Result<(), Error> {
-        self.writer.write_all(&data.to_bytes())
+        let bytes = match data.to_bytes() {
+            Ok(b) => b,
+            Err(e) => return Err(Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        self.writer.write_all(&bytes)
     }
 }
 
@@ -148,7 +165,12 @@ impl TxEncoder<TcpStream> {
 
 impl Encoder<Transaction> for TxEncoder<TcpStream> {
     fn encode(&mut self, data: &Transaction) -> Result<(), Error> {
-        self.writer.write_all(&data.to_bytes())
+        let bytes = match data.to_bytes() {
+            Ok(b) => b,
+            Err(e) => return Err(Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        self.writer.write_all(&bytes)
     }
 }
 
@@ -296,7 +318,7 @@ mod test {
         let header = random_header(1, random_hash());
         let block = random_block(header);
 
-        let block_bytes = block.to_bytes();
+        let block_bytes = block.to_bytes().unwrap();
 
         let reader = VecBuf::new_reader(&block_bytes);
         let mut dec = BlockDecoder::new_buf_decoder(reader);
@@ -332,7 +354,7 @@ mod test {
     fn test_tx_decoder() {
         let tx = random_signed_tx();
 
-        let bytes = tx.to_bytes();
+        let bytes = tx.to_bytes().unwrap();
 
         let reader = VecBuf::new_reader(&bytes);
         let mut dec = TxDecoder::new_buf_decoder(reader);

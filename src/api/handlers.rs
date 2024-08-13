@@ -6,10 +6,12 @@ use super::{
     types::{ArcRcpHandler, BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
     util::{json_response, parse_body, to_bytes},
 };
-use crate::core::encoding::JsonEncoding;
+use crate::core::{
+    encoding::{ByteEncoding, JsonEncoding},
+    transaction::Transaction,
+};
 use crate::{
     api::types::{BlockJson, TxsJson},
-    core::hasher::Hasher,
     network::rpc::{RpcHandlerResponse, RpcHeader, RPC},
 };
 
@@ -76,7 +78,8 @@ pub async fn get_block(
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            json!({ "data": block.to_json() })
+            let data = block.to_json()?;
+            json!({ "data": data })
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
@@ -111,7 +114,7 @@ pub async fn get_tx(
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
             let data = json!({
-                "hash": tx.hash.to_string(),
+                "hash": tx.hash().to_string(),
             });
             json!({ "data": data })
         }
@@ -136,13 +139,15 @@ pub async fn new_tx(
         .await;
     }
 
-    let data = data.unwrap();
+    let byte_data = to_bytes(&data.unwrap())?;
 
-    debug!("NEW TX REQ :{data:?}",);
+    let new_tx = Transaction::new(&byte_data);
+
+    debug!("NEW TX REQ :{new_tx:?}",);
 
     let rpc = RPC {
         header: RpcHeader::NewTx,
-        payload: to_bytes(&data)?,
+        payload: new_tx.to_bytes()?,
     };
 
     let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
@@ -150,7 +155,7 @@ pub async fn new_tx(
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
             let data = json!({
-                "hash": tx.hash.to_string(),
+                "hash": tx.hash().to_string(),
             });
             json!({ "data": data })
         }
@@ -186,7 +191,7 @@ pub async fn get_last_block(
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            let data = block.to_json();
+            let data = block.to_json()?;
             json!({ "data": data })
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
@@ -222,7 +227,7 @@ pub async fn get_chain_height(
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
             let data = json!({
-                "hash": tx.hash.to_string(),
+                "hash": tx.hash().to_string(),
             });
             json!({ "data": data })
         }

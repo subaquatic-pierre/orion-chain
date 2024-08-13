@@ -1,8 +1,14 @@
 use std::ops::Deref;
 
-use super::error::CryptoError;
-use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
+use serde::{Deserialize, Serialize};
 
+use super::error::CryptoError;
+use crate::core::{
+    encoding::{ByteEncoding, HexEncoding},
+    error::CoreError,
+};
+
+#[derive(Serialize, Deserialize)]
 pub struct Address {
     inner: [u8; 20],
 }
@@ -15,61 +21,32 @@ impl Deref for Address {
     }
 }
 
-impl Address {}
-
-impl ByteDecoding for Address {
-    type Target = Self;
-    type Error = CryptoError;
-
-    fn from_bytes(data: &[u8]) -> Result<Address, CryptoError> {
-        let mut buf = [0_u8; 20];
-        if data.len() != 20 {
-            return Err(CryptoError::GenerateKey(
-                "incorrect byte format for address".to_string(),
-            ));
+impl Address {
+    pub fn new(data: &[u8]) -> Self {
+        let mut bytes = [0_u8; 20];
+        for (i, byte) in data.iter().enumerate() {
+            bytes[i] = byte.clone()
         }
-
-        for (i, &b) in data.iter().enumerate() {
-            buf[i] = b
-        }
-
-        Ok(Self { inner: buf })
+        Self { inner: bytes }
     }
 }
 
-impl ByteEncoding for Address {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.inner.to_vec()
+impl ByteEncoding<Address> for Address {
+    fn from_bytes(data: &[u8]) -> Result<Address, CoreError> {
+        Ok(bincode::deserialize(data)?)
+    }
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
     }
 }
 
-impl HexEncoding for Address {
-    fn to_hex(&self) -> String {
-        hex::encode(self.inner)
+impl HexEncoding<Address> for Address {
+    fn from_hex(data: &str) -> Result<Address, CoreError> {
+        Ok(Self::from_bytes(&hex::decode(data)?)?)
     }
-}
 
-impl HexDecoding for Address {
-    type Target = Self;
-    type Error = CryptoError;
-    fn from_hex(data: &str) -> Result<Address, CryptoError> {
-        if data.len() != 40 {
-            return Err(CryptoError::GenerateKey(
-                "incorrect hex format for address".to_string(),
-            ));
-        }
-
-        let bytes = hex::decode(data);
-
-        if bytes.is_err() {
-            return Err(CryptoError::GenerateKey(
-                "unable to generate bytes from hex".to_string(),
-            ));
-        }
-
-        let bytes = bytes.unwrap();
-
-        Self::from_bytes(&bytes)
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(self.to_bytes()?))
     }
 }
 
@@ -88,7 +65,7 @@ mod test {
 
         let addr = pub_key.address().unwrap();
 
-        let bytes = pub_key.to_bytes();
+        let bytes = pub_key.to_bytes().unwrap();
 
         let mut addr_bytes = [0_u8; 20];
 
@@ -101,9 +78,9 @@ mod test {
 
         let addr_2 = Address::from_bytes(&addr_bytes).unwrap();
 
-        assert_eq!(addr.to_hex(), addr_2.to_hex());
+        assert_eq!(addr.to_hex().unwrap(), addr_2.to_hex().unwrap());
 
-        let bytes = pub_key_2.to_bytes();
+        let bytes = pub_key_2.to_bytes().unwrap();
 
         let mut addr_bytes = [0_u8; 20];
 
@@ -115,9 +92,9 @@ mod test {
         }
 
         let addr_3 = Address::from_bytes(&addr_bytes).unwrap();
-        assert_ne!(addr.to_hex(), addr_3.to_hex());
+        assert_ne!(addr.to_hex().unwrap(), addr_3.to_hex().unwrap());
 
-        let bytes = pub_key_2.to_bytes();
+        let bytes = pub_key_2.to_bytes().unwrap();
         let mut addr_bytes = [0_u8; 20];
 
         for (i, &b) in bytes.iter().rev().enumerate() {
@@ -130,6 +107,9 @@ mod test {
         let new_hex = hex::encode(&addr_bytes);
         let addr_4 = Address::from_hex(&new_hex).unwrap();
 
-        assert_eq!(pub_key_2.address().unwrap().to_hex(), addr_4.to_hex());
+        assert_eq!(
+            pub_key_2.address().unwrap().to_hex().unwrap(),
+            addr_4.to_hex().unwrap()
+        );
     }
 }

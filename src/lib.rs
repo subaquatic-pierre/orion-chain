@@ -63,7 +63,8 @@ pub fn transaction_tester_thread(handler: Arc<Mutex<RpcHandler>>) {
 
         let rpc = RPC {
             header: RpcHeader::NewTx,
-            payload: tx.to_bytes(),
+            // TODO: Error handling on byte encoding
+            payload: tx.to_bytes().unwrap(),
         };
 
         if let Ok(handler) = handler.lock() {

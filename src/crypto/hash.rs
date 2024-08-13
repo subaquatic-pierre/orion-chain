@@ -1,11 +1,15 @@
 use std::fmt::Display;
 use std::hash::{Hash as StdHash, Hasher};
+use std::ops::Deref;
 
-use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
+use serde::{Deserialize, Serialize};
+
+use crate::core::encoding::{ByteEncoding, HexEncoding};
+use crate::core::error::CoreError;
 
 use super::error::CryptoError;
 
-#[derive(Clone, Debug, Ord, PartialOrd)]
+#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Hash {
     inner: [u8; 32],
 }
@@ -51,41 +55,29 @@ impl Hash {
     }
 }
 
-impl ByteDecoding for Hash {
-    type Target = Self;
-    type Error = CryptoError;
+impl ByteEncoding<Hash> for Hash {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(self.inner.to_vec())
+    }
 
-    fn from_bytes(data: &[u8]) -> Result<Self, CryptoError> {
-        Self::new(data)
+    fn from_bytes(data: &[u8]) -> Result<Hash, CoreError> {
+        Ok(Self::new(data)?)
     }
 }
 
-impl ByteEncoding for Hash {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.inner.to_vec()
+impl HexEncoding<Hash> for Hash {
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(self.inner))
     }
-}
 
-impl HexEncoding for Hash {
-    fn to_hex(&self) -> String {
-        hex::encode(self.inner)
-    }
-}
-
-impl HexDecoding for Hash {
-    type Target = Self;
-    type Error = CryptoError;
-    fn from_hex(data: &str) -> Result<Hash, CryptoError> {
-        match hex::decode(data) {
-            Ok(bytes) => Self::new(&bytes),
-            Err(_) => Err(CryptoError::HashError("unable to decode hash".to_string())),
-        }
+    fn from_hex(data: &str) -> Result<Hash, CoreError> {
+        Ok(Self::from_bytes(&hex::decode(data)?)?)
     }
 }
 
 impl Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.to_hex())
+        f.write_str(&self.to_hex().unwrap())
     }
 }
 
@@ -100,6 +92,14 @@ impl Eq for Hash {}
 impl StdHash for Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.inner.hash(state);
+    }
+}
+
+impl Deref for Hash {
+    type Target = [u8; 32];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
@@ -123,7 +123,7 @@ mod test {
         assert_eq!(zero_hash.is_zero(), true);
         assert_ne!(random_hash.is_zero(), true);
 
-        assert_eq!(random_hash.to_bytes().len(), 32);
+        assert_eq!(random_hash.to_bytes().unwrap().len(), 32);
 
         let mut buf = [0_u8; 32];
 
@@ -134,13 +134,13 @@ mod test {
         let hash_1 = Hash::new(&buf).unwrap();
         let hash_2 = Hash::new(&buf).unwrap();
 
-        let hash_3 = Hash::from_hex(&hash_1.to_hex());
+        let hash_3 = Hash::from_hex(&hash_1.to_hex().unwrap());
 
         assert!(hash_3.is_ok());
 
         let hash_3 = hash_3.unwrap();
 
-        assert_eq!(hash_3.to_hex(), hash_1.to_hex());
+        assert_eq!(hash_3.to_hex().unwrap(), hash_1.to_hex().unwrap());
 
         assert_eq!(hash_1.to_string(), hash_2.to_string());
 
@@ -154,7 +154,7 @@ mod test {
 
         let hash = h.unwrap();
 
-        assert_eq!(hash.to_bytes().len(), 32);
+        assert_eq!(hash.to_bytes().unwrap().len(), 32);
 
         let sha_h = sha256::digest("Hello world, Data is cool");
 

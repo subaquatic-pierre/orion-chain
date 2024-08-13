@@ -3,9 +3,13 @@ use ecdsa::{
     VerifyingKey,
 };
 use k256::Secp256k1;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
+use crate::core::{
+    encoding::{ByteEncoding, HexEncoding},
+    error::CoreError,
+};
 
 use super::{error::CryptoError, public_key::PublicKey, signature::Signature};
 
@@ -33,67 +37,39 @@ impl PrivateKey {
     }
 }
 
-impl ByteDecoding for PrivateKey {
-    type Target = Self;
-    type Error = CryptoError;
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
-        let mut _bytes = [0_u8; 32];
+impl ByteEncoding<PrivateKey> for PrivateKey {
+    fn from_bytes(bytes: &[u8]) -> Result<PrivateKey, CoreError> {
+        // let mut _bytes = [0_u8; 32];
         if bytes.len() != 32 {
-            return Err(CryptoError::GenerateKey(
+            return Err(CoreError::Parsing(
                 "unable to correctly parse bytes".to_string(),
             ));
         }
 
-        for (i, &b) in bytes.iter().enumerate() {
-            _bytes[i] = b
-        }
-
         Ok(Self {
-            key: SigningKey::<Secp256k1>::from_bytes(&_bytes.into()).unwrap(),
+            key: SigningKey::<Secp256k1>::from_bytes(bytes.into()).unwrap(),
         })
     }
-}
 
-impl ByteEncoding for PrivateKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = [0_u8; 32];
-        for (i, v) in self.key.to_bytes().iter().copied().enumerate() {
-            buf[i] = v
-        }
-        buf.to_vec()
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        todo!()
+        // Ok(bincode::serialize(&self)?)
     }
 }
 
-impl HexDecoding for PrivateKey {
-    type Target = Self;
-    type Error = CryptoError;
-
-    fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
-        if hex_str.len() != 64 {
-            panic!("unable to correctly parse hex string");
-        }
-
-        let h_bytes = hex::decode(hex_str).unwrap();
-        if Self::from_bytes(&h_bytes).is_err() {
-            return Err(CryptoError::GenerateKey(
-                "unable to correctly parse hex string".to_string(),
-            ));
-        }
-
-        Self::from_bytes(&h_bytes)
+impl HexEncoding<PrivateKey> for PrivateKey {
+    fn from_hex(data: &str) -> Result<PrivateKey, CoreError> {
+        Ok(Self::from_bytes(&hex::decode(data)?)?)
     }
-}
 
-impl HexEncoding for PrivateKey {
-    fn to_hex(&self) -> String {
-        hex::encode(self.to_bytes())
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
 }
 
 impl Display for PrivateKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.to_hex())
+        f.write_str(&self.to_hex().unwrap())
     }
 }
 
@@ -105,19 +81,19 @@ mod test {
     fn test_private_key() {
         let pvt_key = PrivateKey::new();
 
-        assert_eq!(pvt_key.to_bytes().len(), 32);
+        assert_eq!(pvt_key.to_bytes().unwrap().len(), 32);
 
-        let bytes = pvt_key.to_bytes();
+        let bytes = pvt_key.to_bytes().unwrap();
 
         let pvt_key_2 = PrivateKey::from_bytes(&bytes).expect("unable to create private key");
 
-        assert_eq!(pvt_key.to_hex(), pvt_key_2.to_hex());
-        assert_eq!(64, pvt_key_2.to_hex().len());
+        assert_eq!(pvt_key.to_hex().unwrap(), pvt_key_2.to_hex().unwrap());
+        assert_eq!(64, pvt_key_2.to_hex().unwrap().len());
 
-        let hex = pvt_key.to_hex();
+        let hex = pvt_key.to_hex().unwrap();
         let new_pvt_key = PrivateKey::from_hex(&hex).expect("unable to create private key");
 
-        assert_eq!(pvt_key.to_hex(), new_pvt_key.to_hex());
+        assert_eq!(pvt_key.to_hex().unwrap(), new_pvt_key.to_hex().unwrap());
     }
 
     #[test]

@@ -1,18 +1,17 @@
 use std::io::Write;
 
 use log::info;
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    api::types::TxsJson,
-    crypto::{hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature},
+use crate::crypto::{
+    hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
 };
 
 use crate::api::types::BlockJson;
 
 use super::{
-    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding, JsonEncoding},
+    encoding::{ByteEncoding, HexEncoding, JsonEncoding},
     error::CoreError,
-    hasher::Hasher,
     header::Header,
     storage::{MemoryStorage, Storage},
     transaction::Transaction,
@@ -119,7 +118,7 @@ impl BlockManager {
     // }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     header: Header,
     signer: Option<PublicKey>,
@@ -210,7 +209,8 @@ impl Block {
     }
 
     pub fn header_data(&self) -> Vec<u8> {
-        self.header.to_bytes()
+        // TODO: Handle Error
+        self.header.to_bytes().unwrap()
     }
 
     pub fn height(&self) -> usize {
@@ -235,7 +235,8 @@ impl Block {
     fn txs_bytes(&self) -> Vec<u8> {
         let mut txs_bytes = vec![];
         for tx in self.transactions.iter() {
-            let bytes = tx.to_bytes();
+            // TODO: Handle Error
+            let bytes = tx.to_bytes().unwrap();
             txs_bytes.extend_from_slice(&bytes);
         }
         txs_bytes
@@ -258,156 +259,106 @@ impl Block {
             0 => Hash::sha256(&[]).unwrap(),
             2 => {
                 let mut buf: Vec<u8> = vec![];
-                buf.extend_from_slice(&txs[0].hash.to_bytes());
-                buf.extend_from_slice(&txs[1].hash.to_bytes());
+                // TODO: Handle Error
+
+                buf.extend_from_slice(&txs[0].hash().to_bytes().unwrap());
+                buf.extend_from_slice(&txs[1].hash().to_bytes().unwrap());
                 return Hash::sha256(&buf).unwrap();
             }
-            _ => return Hash::sha256(&txs[0].hash.to_bytes()).unwrap(),
+            _ => return Hash::sha256(&txs[0].hash().to_bytes().unwrap()).unwrap(),
         };
 
         for (i, tx) in txs.iter().skip(2).enumerate() {
             let prev_tx = &txs[i - 1];
             let mut buf: Vec<u8> = vec![];
-            buf.extend_from_slice(&hash.to_bytes());
-            buf.extend_from_slice(&prev_tx.hash.to_bytes());
-            buf.extend_from_slice(&tx.hash.to_bytes());
+            // TODO: Handle Error
+
+            buf.extend_from_slice(&hash.to_bytes().unwrap());
+            buf.extend_from_slice(&prev_tx.hash().to_bytes().unwrap());
+            buf.extend_from_slice(&tx.hash().to_bytes().unwrap());
             hash = Hash::sha256(&buf).unwrap();
         }
 
-        Hash::new(&hash.to_bytes()).unwrap()
+        // TODO: Handle error
+        Hash::new(&hash.to_bytes().unwrap()).unwrap()
     }
 }
 
-impl ByteEncoding for Block {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = vec![];
+impl ByteEncoding<Block> for Block {
+    fn from_bytes(data: &[u8]) -> Result<Block, CoreError> {
+        Ok(bincode::deserialize(data)?)
+    }
 
-        let header_bytes = self.header.to_bytes();
-        buf.extend_from_slice(&header_bytes);
-
-        if let Some(signature) = &self.signature {
-            buf.extend_from_slice(&[1_u8]);
-            buf.extend_from_slice(&signature.to_bytes());
-        } else {
-            buf.extend_from_slice(&[0_u8]);
-        };
-
-        if let Some(signer) = &self.signer {
-            buf.extend_from_slice(&[1_u8]);
-            buf.extend_from_slice(&signer.to_bytes());
-        } else {
-            buf.extend_from_slice(&[0_u8]);
-        };
-
-        for tx in &self.transactions {
-            buf.extend_from_slice(&tx.to_bytes());
-        }
-
-        buf
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
     }
 }
 
-impl ByteDecoding for Block {
-    type Target = Block;
-    type Error = CoreError;
+// impl ByteDecoding for Block {
+//     type Target = Block;
+//     type Error = CoreError;
 
-    fn from_bytes(data: &[u8]) -> Result<Self::Target, Self::Error> {
-        let mut offset = 0;
-        let data_len = data.len();
-        // let header = random_header(1, random_hash());
+//     fn from_bytes(data: &[u8]) -> Result<Self::Target, Self::Error> {
+//         let mut offset = 0;
+//         let data_len = data.len();
+//         // let header = random_header(1, random_hash());
 
-        let header = Header::from_bytes(data)?;
-        offset += header.to_bytes().len();
+//         let header = Header::from_bytes(data)?;
+//         offset += header.to_bytes().len();
 
-        let has_sig = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
-        offset += 1;
+//         let has_sig = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
+//         offset += 1;
 
-        let mut signature = None;
-        if has_sig > 0 {
-            signature = Some(Signature::from_bytes(&data[offset..offset + 64])?);
-            offset += 64;
-        }
+//         let mut signature = None;
+//         if has_sig > 0 {
+//             signature = Some(Signature::from_bytes(&data[offset..offset + 64])?);
+//             offset += 64;
+//         }
 
-        let has_signer = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
-        offset += 1;
+//         let has_signer = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
+//         offset += 1;
 
-        let mut signer = None;
-        if has_signer > 0 {
-            signer = Some(PublicKey::from_bytes(&data[offset..offset + 33])?);
-            offset += 33;
-        }
+//         let mut signer = None;
+//         if has_signer > 0 {
+//             signer = Some(PublicKey::from_bytes(&data[offset..offset + 33])?);
+//             offset += 33;
+//         }
 
-        // get transaction from rest of bytes
-        let mut txs: Vec<Transaction> = vec![];
-        while offset < data_len {
-            let tx = Transaction::from_bytes(&data[offset..])?;
-            offset += tx.to_bytes().len();
-            txs.push(tx);
-        }
+//         // get transaction from rest of bytes
+//         let mut txs: Vec<Transaction> = vec![];
+//         while offset < data_len {
+//             let tx = Transaction::from_bytes(&data[offset..])?;
+//             offset += tx.to_bytes().len();
+//             txs.push(tx);
+//         }
 
-        let hash = Self::generate_block_hash(&txs);
-        Ok(Self {
-            header,
-            transactions: txs,
-            signer,
-            signature,
-            hash,
-        })
-    }
-}
+//         let hash = Self::generate_block_hash(&txs);
+//         Ok(Self {
+//             header,
+//             transactions: txs,
+//             signer,
+//             signature,
+//             hash,
+//         })
+//     }
+// }
 
-impl HexEncoding for Block {
-    fn to_hex(&self) -> String {
-        let bytes = &self.to_bytes();
-        hex::encode(bytes)
-    }
-}
-
-impl HexDecoding for Block {
-    type Target = Self;
-    type Error = CoreError;
-
+impl HexEncoding<Block> for Block {
     fn from_hex(data: &str) -> Result<Block, CoreError> {
-        let bytes = hex::decode(data);
-        match bytes {
-            Ok(bytes) => Self::from_bytes(&bytes),
-            Err(e) => Err(CoreError::Parsing(format!(
-                "unable to parse hex from bytes {e}"
-            ))),
-        }
+        Ok(Self::from_bytes(&hex::decode(data)?)?)
+    }
+
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
 }
 
-impl JsonEncoding for Block {
-    type Target = BlockJson;
-    fn to_json(&self) -> BlockJson {
-        let txs = self.txs();
-        let tx_hashes = txs.iter().map(|tx| tx.hash().to_string()).collect();
-
-        let txs = TxsJson {
-            count: self.num_txs(),
-            hashes: tx_hashes,
-        };
-
-        let header = self.header();
-
-        let data = BlockJson {
-            version: header.version,
-            height: header.height,
-            hash: self.hash().to_string(),
-            previous_hash: self.prev_hash().to_string(),
-            timestamp: header.timestamp,
-            txs,
-        };
-
-        data
+impl JsonEncoding<BlockJson> for Block {
+    fn from_json(data: serde_json::Value) -> Result<BlockJson, CoreError> {
+        todo!()
     }
-}
-
-// TODO: Not using Hasher trait
-impl Hasher<Block> for Block {
-    fn hash(&self) -> Hash {
-        Hash::sha256(&self.hashable_data()).unwrap()
+    fn to_json(&self) -> Result<serde_json::Value, CoreError> {
+        todo!()
     }
 }
 
@@ -421,11 +372,7 @@ mod test {
     };
 
     use crate::core::{
-        encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
-        error::CoreError,
-        hasher::Hasher,
-        header::Header,
-        transaction::Transaction,
+        encoding::ByteEncoding, error::CoreError, header::Header, transaction::Transaction,
         util::timestamp,
     };
 
@@ -508,7 +455,7 @@ mod test {
         let header = random_header(1, random_hash());
         let block = random_block(header);
 
-        let block_bytes = block.to_bytes();
+        let block_bytes = block.to_bytes().unwrap();
 
         assert!(Block::from_bytes(&block_bytes).is_ok());
 

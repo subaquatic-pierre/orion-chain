@@ -5,16 +5,13 @@ use std::{
 };
 
 use log::{debug, info};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     api::types::GetBlockReq,
     core::{
-        block::Block,
-        blockchain::Blockchain,
-        encoding::{ByteDecoding, ByteEncoding},
-        header::Header,
-        transaction::Transaction,
+        block::Block, blockchain::Blockchain, encoding::ByteEncoding, error::CoreError,
+        header::Header, transaction::Transaction,
     },
     lock,
 };
@@ -23,7 +20,7 @@ use super::{
     error::NetworkError, node::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[repr(u16)]
 pub enum RpcHeader {
     GetBlock = 1,
@@ -57,50 +54,49 @@ pub enum RpcHandlerResponse {
     Header(Header),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RPC {
     pub header: RpcHeader,
     pub payload: Payload,
 }
 
-impl ByteEncoding for RPC {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = vec![];
-        let header_num: u16 = self.header.into();
-        let header_bytes = header_num.to_be_bytes();
-        buf.extend_from_slice(&header_bytes);
-        buf.extend_from_slice(&self.payload);
-        buf
+impl ByteEncoding<RPC> for RPC {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<RPC, CoreError> {
+        Ok(bincode::deserialize(data)?)
     }
 }
 
-impl ByteDecoding for RPC {
-    type Error = NetworkError;
-    type Target = RPC;
+// impl ByteDecoding for RPC {
+//     type Error = NetworkError;
+//     type Target = RPC;
 
-    fn from_bytes(data: &[u8]) -> Result<RPC, NetworkError> {
-        if data.is_empty() {
-            return Err(NetworkError::Decoding(
-                "empty bytes passed to RPC decoding".to_string(),
-            ));
-        }
+//     fn from_bytes(data: &[u8]) -> Result<RPC, NetworkError> {
+//         if data.is_empty() {
+//             return Err(NetworkError::Decoding(
+//                 "empty bytes passed to RPC decoding".to_string(),
+//             ));
+//         }
 
-        if data.len() < 2 {
-            return Err(NetworkError::Decoding(
-                "incorrect header bytes passed to RPC decoding".to_string(),
-            ));
-        }
+//         if data.len() < 2 {
+//             return Err(NetworkError::Decoding(
+//                 "incorrect header bytes passed to RPC decoding".to_string(),
+//             ));
+//         }
 
-        let buf: [u8; 2] = [data[0], data[1]];
+//         let buf: [u8; 2] = [data[0], data[1]];
 
-        let header = RpcHeader::from(u16::from_be_bytes(buf));
+//         let header = RpcHeader::from(u16::from_be_bytes(buf));
 
-        Ok(RPC {
-            header,
-            payload: data[2..].to_vec(),
-        })
-    }
-}
+//         Ok(RPC {
+//             header,
+//             payload: data[2..].to_vec(),
+//         })
+//     }
+// }
 
 pub struct RpcHandler {
     mem_pool: Arc<Mutex<TxPool>>,
@@ -293,10 +289,10 @@ impl RpcHandler {
             Ok(tx) => {
                 if let Ok(mut mem_pool) = self.mem_pool.lock() {
                     mem_pool.add(tx.clone());
-                    debug!(
-                        "adding transaction to the mem_pool in RpcHandler, hash: {}",
-                        tx.hash().to_string()
-                    );
+                    // debug!(
+                    //     "adding transaction to the mem_pool in RpcHandler, hash: {}",
+                    //     tx.hash().to_string()
+                    // );
                     Ok(tx)
                 } else {
                     Err(NetworkError::RPC(

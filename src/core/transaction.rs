@@ -1,4 +1,5 @@
 use log::{debug, info};
+use serde::{Deserialize, Serialize};
 
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
@@ -6,15 +7,13 @@ use crate::crypto::{
 };
 
 use super::{
-    encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding},
+    encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transaction {
-    data_len: u64,
     pub data: Vec<u8>,
-    pub hash: Hash,
     pub signature: Option<Signature>,
     pub signer: Option<PublicKey>,
 }
@@ -22,19 +21,15 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(data: &[u8]) -> Self {
         let data = data.to_vec();
-        let data_len: u64 = data.len() as u64;
-        let hash = Hash::sha256(&data).unwrap();
         Self {
             data,
-            data_len,
-            hash,
             signature: None,
             signer: None,
         }
     }
 
     pub fn hash(&self) -> Hash {
-        self.hash.clone()
+        Hash::sha256(&self.data).unwrap()
     }
 
     pub fn data_str(&self) -> String {
@@ -80,164 +75,23 @@ impl Transaction {
     }
 }
 
-impl ByteEncoding for Transaction {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = vec![];
-
-        let data_len = self.data_len.to_be_bytes();
-        // append data length
-        buf.extend_from_slice(&data_len);
-
-        // append data
-        buf.extend_from_slice(&self.data);
-
-        // append hash
-        buf.extend_from_slice(&self.hash.to_bytes());
-
-        // append signature
-        let sig_bytes = match &self.signature {
-            Some(sig) => {
-                let mut bytes = vec![1_u8];
-                bytes.extend_from_slice(&sig.to_bytes());
-                bytes
-            }
-            None => vec![0_u8],
-        };
-        buf.extend_from_slice(&sig_bytes);
-
-        // append public key
-        let sig_bytes = match &self.signer {
-            Some(key) => {
-                let mut bytes = vec![1_u8];
-                bytes.extend_from_slice(&key.to_bytes());
-                bytes
-            }
-            None => vec![0_u8],
-        };
-        buf.extend_from_slice(&sig_bytes);
-
-        buf
-    }
-}
-
-impl ByteDecoding for Transaction {
-    type Target = Self;
-    type Error = CoreError;
-
+impl ByteEncoding<Transaction> for Transaction {
     fn from_bytes(data: &[u8]) -> Result<Transaction, CoreError> {
-        if data.len() < 8 {
-            return Err(CoreError::Transaction(
-                "incorrectly formatted bytes, no data length in bytes".to_string(),
-            ));
-        }
+        Ok(bincode::deserialize(data)?)
+    }
 
-        // create data buffer
-        let mut data_buf: Vec<u8> = vec![];
-
-        // get length of data bytes
-        let data_len: usize = usize::from_be_bytes(data[0..8].try_into().unwrap());
-
-        let first = data[0..8].to_vec();
-
-        debug!("data data[0..8], :{:?} data_len: {data_len:?}", first);
-        // hold offset for data bytes,
-        // will be used as index for signature start
-        let mut offset = 8 + data_len;
-
-        // fill data buffer
-        for (i, &b) in data.iter().skip(8).enumerate() {
-            // reached end of data
-            if i == data_len {
-                break;
-            }
-            data_buf.push(b);
-
-            // data_index += 1;
-        }
-
-        // info!("{data:?}");
-
-        let hash = Hash::from_bytes(&data_buf[offset..offset + 32]);
-
-        if hash.is_err() {
-            return Err(CoreError::Transaction("unable to parse hash".to_string()));
-        }
-
-        let hash = hash.unwrap();
-
-        offset += 32;
-
-        // get signature
-        let has_sig_byte = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
-
-        // inc offset for has sig byte
-        offset += 1;
-
-        let signature: Option<Signature> = if has_sig_byte == 0 {
-            None
-        } else {
-            match Signature::from_bytes(&data[offset..offset + 64]) {
-                Ok(sig) => Some(sig),
-                Err(e) => {
-                    return Err(CoreError::Transaction(format!(
-                        "unable to parse signature {e}"
-                    )))
-                }
-            }
-        };
-
-        // length of signature, inc offset of signature
-        offset += 64;
-
-        // get public key;
-        let has_pub_key_byte = u8::from_be_bytes(data[offset..offset + 1].try_into().unwrap());
-
-        // inc offset for has key byte
-        offset += 1;
-
-        let signer: Option<PublicKey> = if has_pub_key_byte == 0 {
-            None
-        } else {
-            match PublicKey::from_bytes(&data[offset..offset + 33]) {
-                Ok(key) => Some(key),
-                Err(e) => {
-                    return Err(CoreError::Transaction(format!(
-                        "unable to parse public key {e}"
-                    )))
-                }
-            }
-        };
-
-        Ok(Transaction {
-            data_len: data_len as u64,
-            hash,
-            data: data_buf,
-            signature,
-            signer,
-        })
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(bincode::serialize(&self)?)
     }
 }
 
-impl HexEncoding for Transaction {
-    fn to_hex(&self) -> String {
-        let bytes = &self.to_bytes();
-        hex::encode(bytes)
-    }
-}
-
-impl HexDecoding for Transaction {
-    type Target = Self;
-    type Error = CoreError;
-
+impl HexEncoding<Transaction> for Transaction {
     fn from_hex(data: &str) -> Result<Transaction, CoreError> {
-        match hex::decode(data) {
-            Ok(bytes) => Self::from_bytes(&bytes),
-            Err(e) => {
-                return Err(CoreError::Transaction(format!(
-                    "unable to parse hex string {e})"
-                )))
-            }
-        }
+        Ok(Self::from_bytes(&hex::decode(data)?)?)
+    }
+
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(self.to_bytes()?))
     }
 }
 
@@ -285,11 +139,11 @@ mod test {
         let data = b"Hello world, Data is cool";
 
         let mut tx = Transaction::new(data);
-        let bytes = tx.to_bytes();
+        let bytes = tx.to_bytes().unwrap();
         assert_eq!(bytes.len(), 67);
 
         tx.sign(priv_key.clone());
-        let bytes = tx.to_bytes();
+        let bytes = tx.to_bytes().unwrap();
 
         let tx_1_sig = tx.signature.unwrap();
 
@@ -325,11 +179,11 @@ mod test {
         let data = b"Hello world, Data is cool";
 
         let mut tx = Transaction::new(data);
-        let hex_str = tx.to_hex();
+        let hex_str = tx.to_hex().unwrap();
         assert_eq!(hex_str.len(), 134);
 
         tx.sign(priv_key.clone());
-        let hex_str = tx.to_hex();
+        let hex_str = tx.to_hex().unwrap();
 
         let tx_1_hash = tx.hash();
         let tx_1_sig = tx.signature.unwrap();

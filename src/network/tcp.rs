@@ -2,7 +2,7 @@ use log::{debug, error, info, warn};
 
 use std::io::{BufReader, BufWriter};
 
-use crate::core::encoding::{ByteDecoding, ByteEncoding};
+use crate::core::encoding::ByteEncoding;
 use crate::core::util::timestamp;
 use crate::lock;
 use crate::network::error::NetworkError;
@@ -81,7 +81,9 @@ impl TcpController {
     // pub fn send_rpc(&self, addr: SocketAddr, rpc: RPC) {
     pub fn send_rpc(&self, addr: SocketAddr, rpc: &RPC) {
         if let Some(peer) = self.peers.lock().unwrap().get_mut(&addr) {
-            let msg = PeerMessage::RPC(self.node_addr, rpc.to_bytes());
+            // TODO: Error handling on thread lock
+            // TODO: Error handling on rpc encoding
+            let msg = PeerMessage::RPC(self.node_addr, rpc.to_bytes().unwrap());
             peer.send_msg(&msg);
         }
     }

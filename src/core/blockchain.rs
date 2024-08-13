@@ -1,9 +1,6 @@
 use log::info;
 
-use crate::{
-    core::{hasher::Hasher, storage::MemoryStorage},
-    crypto::hash::Hash,
-};
+use crate::crypto::hash::Hash;
 
 use super::{
     block::{Block, BlockManager},
@@ -103,7 +100,6 @@ mod test {
     use crate::{
         core::{
             block::{random_block, random_signed_block},
-            hasher::Hasher,
             header::random_header,
             validator,
         },

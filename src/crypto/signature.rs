@@ -1,12 +1,14 @@
 use ecdsa::Signature as ECDASignature;
 use k256::Secp256k1;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::core::encoding::{ByteDecoding, ByteEncoding, HexDecoding, HexEncoding};
+use crate::core::{
+    encoding::{ByteEncoding, HexEncoding},
+    error::CoreError,
+};
 
-use super::error::CryptoError;
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Signature {
     pub inner: ECDASignature<Secp256k1>,
 }
@@ -17,57 +19,43 @@ impl Signature {
     }
 }
 
-impl HexEncoding for Signature {
-    fn to_hex(&self) -> String {
-        hex::encode(self.to_bytes())
-    }
-}
+impl HexEncoding<Signature> for Signature {
+    fn from_hex(data: &str) -> Result<Signature, CoreError> {
+        let bytes = hex::decode(data)?;
 
-impl HexDecoding for Signature {
-    type Target = Self;
-    type Error = CryptoError;
-
-    fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
-        let bytes = hex::decode(hex_str);
-        if bytes.is_err() {
-            return Err(CryptoError::SignatureError(
-                "unable to parse hex from bytes".to_string(),
-            ));
-        }
-
-        let bytes = bytes.unwrap();
         match ECDASignature::from_slice(&bytes) {
             Ok(sig) => Ok(Self { inner: sig }),
-            Err(e) => Err(CryptoError::SignatureError(format!(
+            Err(e) => Err(CoreError::Parsing(format!(
                 "unable to generate signature from bytes: {e}"
             ))),
         }
+
+        // Ok(Self::from_bytes(&hex::decode(data)?)?)
+    }
+
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
 }
 
-impl ByteDecoding for Signature {
-    type Target = Self;
-    type Error = CryptoError;
+impl ByteEncoding<Signature> for Signature {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(self.inner.to_vec())
+    }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
+    fn from_bytes(bytes: &[u8]) -> Result<Signature, CoreError> {
         match ECDASignature::from_slice(bytes) {
             Ok(sig) => Ok(Self { inner: sig }),
-            Err(e) => Err(CryptoError::SignatureError(format!(
+            Err(e) => Err(CoreError::Parsing(format!(
                 "unable to generate signature from bytes: {e}"
             ))),
         }
-    }
-}
-
-impl ByteEncoding for Signature {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.inner.to_vec()
     }
 }
 
 impl Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.to_hex())
+        f.write_str(&self.to_hex().unwrap())
     }
 }
 
@@ -87,7 +75,7 @@ mod test {
         let msg = b"Hello world";
 
         let sig = pvt_key.sign(msg);
-        let sig_bytes = sig.to_bytes();
+        let sig_bytes = sig.to_bytes().unwrap();
 
         assert_eq!(sig_bytes.len(), 64);
 
@@ -96,13 +84,13 @@ mod test {
         assert_eq!(sig_2.is_err(), false);
         let sig_2 = sig_2.unwrap();
 
-        assert_eq!(sig.to_hex(), sig_2.to_hex());
+        assert_eq!(sig.to_hex().unwrap(), sig_2.to_hex().unwrap());
 
-        let sig_3 = Signature::from_hex(&sig_2.to_hex());
+        let sig_3 = Signature::from_hex(&sig_2.to_hex().unwrap());
 
         assert_eq!(sig_3.is_err(), false);
         let sig_3 = sig_3.unwrap();
 
-        assert_eq!(sig.to_hex(), sig_3.to_hex());
+        assert_eq!(sig.to_hex().unwrap(), sig_3.to_hex().unwrap());
     }
 }
