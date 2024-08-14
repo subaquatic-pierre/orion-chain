@@ -18,15 +18,14 @@ use std::{
     thread, time,
 };
 
+use crate::api::rpc::{RpcHandler, RpcHeader, RPC};
 use crate::core::transaction::random_signed_tx;
 use crate::core::{block::random_block, blockchain::Blockchain, header::random_header};
-use crate::{core::encoding::ByteEncoding, network::rpc::RpcHandlerResponse};
-
-use network::{
+use crate::network::{
     node::{ChainNode, NodeConfig},
-    rpc::{RpcHandler, RpcHeader, RPC},
     types::RpcChanMsg,
 };
+use crate::{api::rpc::RpcHandlerResponse, core::encoding::ByteEncoding};
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;

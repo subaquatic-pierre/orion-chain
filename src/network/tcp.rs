@@ -2,10 +2,6 @@ use log::{debug, error, info, warn};
 
 use std::io::{BufReader, BufWriter};
 
-use crate::core::encoding::ByteEncoding;
-use crate::core::util::timestamp;
-use crate::lock;
-use crate::network::error::NetworkError;
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -13,11 +9,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
 
+use crate::api::rpc::RPC;
+use crate::core::encoding::ByteEncoding;
+use crate::core::util::timestamp;
+use crate::lock;
+use crate::network::error::NetworkError;
+
 use super::types::RpcChanMsg;
 use super::{
     message::PeerMessage,
     peer::{PeerStreamDirection, TcpPeer},
-    rpc::RPC,
     types::ArcMut,
 };
 

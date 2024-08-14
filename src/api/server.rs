@@ -11,6 +11,9 @@ use log::{error, info, warn};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+use super::rpc::RpcHandler;
+use super::types::ArcRcpHandler;
+
 use super::tokio_util::TokioIo;
 use crate::core::block::random_signed_block;
 use crate::lock;
@@ -29,19 +32,14 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 use super::router::HttpRouter;
 
 pub struct ApiServer {
-    _node: Arc<Mutex<ChainNode>>,
     router: Arc<Mutex<HttpRouter>>,
 }
 
 impl ApiServer {
-    pub fn new(node: ChainNode) -> Self {
-        let router = Arc::new(Mutex::new(HttpRouter::new(node.rpc_handler())));
+    pub fn new(rpc_handler: ArcRcpHandler) -> Self {
+        let router = Arc::new(Mutex::new(HttpRouter::new(rpc_handler)));
 
-        let node = Arc::new(Mutex::new(node));
-        Self {
-            _node: node,
-            router,
-        }
+        Self { router }
     }
 
     pub async fn start(&self) -> Result<()> {

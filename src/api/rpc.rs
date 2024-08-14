@@ -17,7 +17,7 @@ use crate::{
     lock,
 };
 
-use super::{
+use crate::network::{
     error::NetworkError, miner::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
 };
 
@@ -75,7 +75,7 @@ pub struct RpcHandler {
     mem_pool: Arc<Mutex<TxPool>>,
     _miner: Arc<Mutex<BlockMiner>>,
     chain: Arc<Mutex<Blockchain>>,
-    tcp_controller: Arc<Mutex<TcpController>>,
+    _tcp_controller: Arc<Mutex<TcpController>>,
 }
 
 impl RpcHandler {
@@ -89,18 +89,28 @@ impl RpcHandler {
             mem_pool,
             _miner: miner,
             chain: chain,
-            tcp_controller,
+            _tcp_controller: tcp_controller,
         }
     }
 
+    // simple wrapper method to be used in api routes/handlers
+    // calls main handle_rpc method which is used for both peer RPC messages and client http requests
     pub fn handle_client_rpc(&self, rpc: &RPC) -> Result<RpcHandlerResponse, NetworkError> {
+        self.handle_rpc(rpc, None)
+    }
+
+    pub fn handle_rpc(
+        &self,
+        rpc: &RPC,
+        _peer_addr: Option<SocketAddr>,
+    ) -> Result<RpcHandlerResponse, NetworkError> {
         // TODO: handle all RPC header types
         let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
                 debug!("rpc message received in handler at RpcHeader::GetBlock");
                 match self.get_block(&payload) {
-                    Ok(block) => Ok(RpcHandlerResponse::Block(block.clone())),
+                    Ok(block) => Ok(RpcHandlerResponse::Block(block)),
                     Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
                 }
             }
@@ -148,59 +158,16 @@ impl RpcHandler {
         }
     }
 
-    pub fn handle_peer_rpc(
-        &self,
-        rpc: &RPC,
-        peer_addr: SocketAddr,
-    ) -> Result<RpcHandlerResponse, NetworkError> {
-        // TODO: handle all RPC header types
-        let tcp = lock!(self.tcp_controller);
-        let payload = rpc.payload.clone();
-        match rpc.header {
-            RpcHeader::GetBlock => {
-                debug!("rpc message received in peer handler at RpcHeader::GetBlock");
-                match self.get_block(&payload) {
-                    Ok(block) => Ok(RpcHandlerResponse::Block(block.clone())),
-                    Err(msg) => Ok(RpcHandlerResponse::Generic(msg.to_string())),
-                }
-            }
-            RpcHeader::GetLastBlock => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
-            }
-            RpcHeader::NewBlock => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
-            }
-            RpcHeader::GetChainHeight => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
-            }
-            RpcHeader::GetTx => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
-            }
-            RpcHeader::NewTx => {
-                debug!("rpc message received in handler at RpcHeader::GetBlock",);
-
-                Ok(RpcHandlerResponse::Generic(format!("Generic response")))
-            }
-            _ => Ok(RpcHandlerResponse::Generic(
-                "unknown RPC header requested".to_string(),
-            )),
-        }
-    }
-
     // ---
     // Private methods
     // ---
 
     fn get_block(&self, payload: &Vec<u8>) -> Result<Block, NetworkError> {
-        let req: GetBlockReq = bincode::deserialize(&payload).unwrap();
+        let req: GetBlockReq = match bincode::deserialize(&payload) {
+            Ok(req) => req,
+            Err(e) => return Err(NetworkError::Decoding(e.to_string())),
+        };
+
         let chain = lock!(self.chain);
 
         if req.hash.is_none() && req.height.is_none() {
@@ -210,14 +177,18 @@ impl RpcHandler {
         }
 
         let block = if let Some(height) = &req.height {
-            let block_id = height.parse::<usize>().unwrap();
+            let block_id = match height.parse::<usize>() {
+                Ok(height) => height,
+                Err(e) => return Err(NetworkError::Decoding(e.to_string())),
+            };
 
             chain.get_block(block_id)
-        } else {
-            let hash = req.hash.clone();
-            let hash = hash.unwrap();
-
+        } else if let Some(hash) = &req.hash {
             chain.get_block_by_hash(&hash)
+        } else {
+            return Err(NetworkError::Decoding(
+                "height or hash not supplied".to_string(),
+            ));
         };
 
         if let Some(block) = block {

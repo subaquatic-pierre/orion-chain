@@ -11,8 +11,8 @@ use crate::core::{
     transaction::Transaction,
 };
 use crate::{
+    api::rpc::{RpcHandlerResponse, RpcHeader, RPC},
     api::types::{BlockJson, TxsJson},
-    network::rpc::{RpcHandlerResponse, RpcHeader, RPC},
 };
 
 pub async fn get_block_header(

@@ -10,13 +10,12 @@ use orion_chain::core::transaction::random_signed_tx;
 use orion_chain::crypto::hash::Hash;
 use orion_chain::crypto::utils::random_hash;
 
-use orion_chain::network::rpc::{RpcHeader, RPC};
+use orion_chain::logger_init;
 use orion_chain::{
     crypto::private_key::PrivateKey,
     network::node::{ChainNode, NodeConfig},
     Result,
 };
-use orion_chain::{logger_init, transaction_tester_thread};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,6 +34,8 @@ async fn main() -> Result<()> {
     // a functioning blockchain.
     let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
     let block = random_block(random_header(0, genesis_hash));
+    // TODO: start chain from config
+    // start chain within ChainNode
     let chain = Blockchain::new_with_genesis(block);
 
     // Create a ChainNode with newly created blockchain. ChainNode
@@ -50,6 +51,6 @@ async fn main() -> Result<()> {
     // Create main entry point for HTTP API server for the node,
     // pass in Arc of ChainNode to access blockchain functionality
     // within the Api
-    let server = ApiServer::new(chain_node);
+    let server = ApiServer::new(chain_node.rpc_handler());
     server.start().await
 }

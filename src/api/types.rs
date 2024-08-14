@@ -1,4 +1,4 @@
-use crate::network::rpc::RpcHandler;
+use crate::api::rpc::RpcHandler;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};

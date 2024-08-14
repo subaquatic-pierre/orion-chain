@@ -45,9 +45,7 @@ pub fn to_bytes<T>(data: &T) -> StdResult<Vec<u8>, CoreError>
 where
     T: ?Sized + Serialize,
 {
-    let encoder = bincode::DefaultOptions::new().with_big_endian();
-
-    match encoder.serialize(data) {
+    match bincode::serialize(data) {
         Ok(b) => Ok(b),
         Err(e) => Err(CoreError::Parsing(e.to_string())),
     }

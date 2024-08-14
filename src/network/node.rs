@@ -15,6 +15,7 @@ use log::{error, info, warn};
 use crate::{core::error::CoreError, lock};
 
 use crate::{
+    api::rpc::{RpcHandler, RpcHeader, RPC},
     core::{
         block::Block,
         blockchain::Blockchain,
@@ -28,7 +29,6 @@ use crate::{
 use super::{
     error::NetworkError,
     miner::BlockMiner,
-    rpc::{RpcHandler, RpcHeader, RPC},
     tx_pool::TxPool,
     types::{Payload, RpcChanMsg},
 };
@@ -95,6 +95,7 @@ impl ChainNode {
     pub fn send_rpc(&self, peer_addr: SocketAddr, payload: Payload) -> Result<(), NetworkError> {
         let tcp = lock!(self.tcp_controller);
         let rpc = RPC {
+            // TODO: get header from args
             header: RpcHeader::GetBlock,
             payload,
         };
@@ -107,15 +108,18 @@ impl ChainNode {
         // Start TcpController
         // launches all threads need to communicate with peers
         // all messages received from peers are send back on self.rpc_tx
-        // chanel
-        let mut tcp = lock!(self.tcp_controller);
+        // chanel which is handled by RpcHandler struct withing api module
+        let controller = self.tcp_controller.clone();
+        let mut tcp = lock!(controller);
+        // TODO: get peer addresses from config
         tcp.start(vec![]);
 
         // Start thread to listen for all incoming RPC
-        // messages
-        self.spawn_rpc_thread();
+        // messages from peers
+        self.spawn_peer_rpc_thread();
 
         // Spawn miner thread if ChainNode is miner
+        // TODO: Check if is full node in config, if not full node then miner is not needed
         self.spawn_miner_thread();
 
         Ok(())
@@ -133,9 +137,11 @@ impl ChainNode {
     // ---
     // Private Methods
     // ---
-    fn spawn_rpc_thread(&self) {
+    // Main thread that listens for RPC messages from peers,
+    // messages are then handled by rpc_handler
+    fn spawn_peer_rpc_thread(&self) {
         let rpc_rx = self.rpc_rx.clone();
-        let handler = self.rpc_handler.clone();
+        let handler = self.rpc_handler();
 
         // Spawn thread to handle message, main RPC handler thread
         thread::spawn(move || {
@@ -143,13 +149,14 @@ impl ChainNode {
             for (peer_addr, rpc) in rpc_rx.iter() {
                 let handler = lock!(handler);
 
-                if let Err(e) = handler.handle_peer_rpc(&rpc, peer_addr) {
+                if let Err(e) = handler.handle_rpc(&rpc, Some(peer_addr)) {
                     error!("{e}");
                 }
             }
         });
     }
 
+    // TODO: change miner to VM
     fn spawn_miner_thread(&self) {
         let block_time = self.block_time;
         let miner = self.miner.clone();
