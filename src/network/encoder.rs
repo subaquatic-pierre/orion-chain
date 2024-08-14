@@ -301,7 +301,7 @@ mod test {
         let header = random_header(1, random_hash());
         let block = random_block(header);
 
-        let block_bytes = block.to_bytes();
+        let block_bytes = block.to_bytes().unwrap();
 
         // encode block into vev buf writer
         let buf = VecBuf::new_writer();
@@ -338,7 +338,7 @@ mod test {
     fn test_tx_encoder() {
         let tx = random_signed_tx();
 
-        let bytes = tx.to_bytes();
+        let bytes = tx.to_bytes().unwrap();
 
         // encode tx into vec buf writer
         let buf = VecBuf::new_writer();
@@ -375,7 +375,7 @@ mod test {
         let bytes: [u8; 32] = rand::random();
         let mut vec_writer = VecBuf::new_writer();
 
-        vec_writer.write_all(&bytes);
+        vec_writer.write_all(&bytes).unwrap();
 
         let encoded_bytes = vec_writer.inner_bytes();
 

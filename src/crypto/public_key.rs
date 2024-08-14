@@ -1,7 +1,7 @@
 use ecdsa::{signature::Verifier, VerifyingKey};
 use k256::Secp256k1;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use crate::core::{
     encoding::{ByteEncoding, HexEncoding},
@@ -76,26 +76,54 @@ impl HexEncoding<PublicKey> for PublicKey {
     }
 }
 
-// impl HexDecoding for PublicKey {
-//     type Target = Self;
-//     type Error = CryptoError;
-
-//     fn from_hex(hex_str: &str) -> Result<Self, CryptoError> {
-//         let res = hex::decode(hex_str);
-//         if res.is_err() {
-//             return Err(CryptoError::GenerateKey(
-//                 "unable to correctly parse hex string".to_string(),
-//             ));
-//         }
-//         let bytes = res.unwrap();
-
-//         Self::from_bytes(&bytes)
-//     }
-// }
-
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.to_hex().unwrap())
+    }
+}
+
+impl From<PublicKeyBytes> for PublicKey {
+    fn from(value: PublicKeyBytes) -> Self {
+        Self::from_bytes(value.as_ref()).unwrap()
+    }
+}
+
+// impl From<PublicKey> for PublicKeyBytes {
+//     fn from(value: PublicKey) -> Self {
+//         Self::from_bytes(&value.to_bytes().unwrap()).unwrap()
+//     }
+// }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PublicKeyBytes {
+    #[serde(with = "serde_bytes")]
+    inner: [u8; 33],
+}
+
+impl PublicKeyBytes {
+    pub fn new(data: &[u8]) -> Self {
+        let mut buf = [0_u8; 33];
+        for (i, b) in data.iter().enumerate() {
+            buf[i] = b.clone();
+        }
+        Self { inner: buf }
+    }
+}
+
+impl ByteEncoding<PublicKeyBytes> for PublicKeyBytes {
+    fn from_bytes(data: &[u8]) -> Result<PublicKeyBytes, CoreError> {
+        Ok(PublicKeyBytes::new(data))
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(self.inner.to_vec())
+    }
+}
+
+impl Deref for PublicKeyBytes {
+    type Target = [u8; 33];
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 

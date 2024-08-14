@@ -1,7 +1,9 @@
+use bytes::Bytes;
 use ecdsa::Signature as ECDASignature;
 use k256::Secp256k1;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use serde_with::{serde_as, SerializeAs};
+use std::{fmt::Display, ops::Deref};
 
 use crate::core::{
     encoding::{ByteEncoding, HexEncoding},
@@ -16,6 +18,40 @@ pub struct Signature {
 impl Signature {
     pub fn new(signature: ECDASignature<Secp256k1>) -> Self {
         Self { inner: signature }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SignatureBytes {
+    #[serde(with = "serde_bytes")]
+    inner: [u8; 64],
+}
+
+impl SignatureBytes {
+    pub fn new(data: &[u8]) -> Self {
+        let mut buf = [0_u8; 64];
+        for (i, b) in data.iter().enumerate() {
+            buf[i] = b.clone()
+        }
+
+        Self { inner: buf }
+    }
+}
+
+impl ByteEncoding<Signature> for SignatureBytes {
+    fn from_bytes(data: &[u8]) -> Result<Signature, CoreError> {
+        Signature::from_bytes(data)
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        Ok(self.inner.to_vec())
+    }
+}
+
+impl Deref for SignatureBytes {
+    type Target = [u8; 64];
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
@@ -67,10 +103,10 @@ mod test {
     #[test]
     fn test_signature() {
         let pvt_key = PrivateKey::new();
-        let pub_key = pvt_key.pub_key();
+        let _pub_key = pvt_key.pub_key();
 
         let pvt_key_2 = PrivateKey::new();
-        let pub_key_2 = pvt_key_2.pub_key();
+        let _pub_key_2 = pvt_key_2.pub_key();
 
         let msg = b"Hello world";
 

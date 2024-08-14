@@ -9,13 +9,12 @@ use crate::core::error::CoreError;
 
 use super::error::CryptoError;
 
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct Hash {
-    inner: [u8; 32],
-}
+#[derive(Clone, Debug, Ord, Copy, PartialOrd, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Hash([u8; 32]);
 
 impl Hash {
-    pub fn new(bytes: &[u8]) -> Result<Self, CryptoError> {
+    pub fn new(bytes: &[u8; 32]) -> Result<Self, CryptoError> {
         if bytes.len() != 32 {
             return Err(CryptoError::HashError("incorrect byte length".to_string()));
         }
@@ -26,11 +25,11 @@ impl Hash {
             buf[i] = b
         }
 
-        Ok(Self { inner: buf })
+        Ok(Self { 0: buf })
     }
 
     pub fn len(&self) -> usize {
-        self.inner.len()
+        self.0.len()
     }
 
     pub fn sha256(data: &[u8]) -> Result<Self, CryptoError> {
@@ -42,11 +41,15 @@ impl Hash {
             ));
         }
         let bytes = bytes.unwrap();
-        Self::new(&bytes)
+        let mut buf = [0_u8; 32];
+        for (i, b) in bytes.iter().enumerate() {
+            buf[i] = b.clone()
+        }
+        Self::new(&buf)
     }
 
     pub fn is_zero(&self) -> bool {
-        for &b in self.inner.iter() {
+        for &b in self.0.iter() {
             if b != 0 {
                 return false;
             }
@@ -57,17 +60,21 @@ impl Hash {
 
 impl ByteEncoding<Hash> for Hash {
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(self.inner.to_vec())
+        Ok(self.0.to_vec())
     }
 
     fn from_bytes(data: &[u8]) -> Result<Hash, CoreError> {
-        Ok(Self::new(data)?)
+        let mut buf = [0_u8; 32];
+        for (i, b) in data.iter().enumerate() {
+            buf[i] = b.clone()
+        }
+        Ok(Self::new(&buf)?)
     }
 }
 
 impl HexEncoding<Hash> for Hash {
     fn to_hex(&self) -> Result<String, CoreError> {
-        Ok(hex::encode(self.inner))
+        Ok(hex::encode(self.0))
     }
 
     fn from_hex(data: &str) -> Result<Hash, CoreError> {
@@ -91,7 +98,7 @@ impl Eq for Hash {}
 
 impl StdHash for Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.inner.hash(state);
+        self.0.hash(state);
     }
 }
 
@@ -99,7 +106,7 @@ impl Deref for Hash {
     type Target = [u8; 32];
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
@@ -146,7 +153,7 @@ mod test {
 
         assert_eq!(random_bytes.len(), 32);
 
-        let hash = sha256::digest("Hello world, Data is cool");
+        let _hash = sha256::digest("Hello world, Data is cool");
 
         let h = Hash::sha256(b"Hello world, Data is cool");
 

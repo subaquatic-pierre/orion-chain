@@ -16,7 +16,11 @@ impl Error for CoreError {}
 impl Display for CoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            msg => write!(f, "{msg}"),
+            Self::Serialize(msg) => write!(f, "{}", msg),
+            Self::Parsing(msg) => write!(f, "{}", msg),
+            Self::Transaction(msg) => write!(f, "{}", msg),
+            Self::Block(msg) => write!(f, "{}", msg),
+            Self::CryptoError(msg) => write!(f, "{}", msg),
         }
     }
 }

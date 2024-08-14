@@ -12,7 +12,7 @@ use std::{
 
 use log::{error, info, warn};
 
-use crate::lock;
+use crate::{core::error::CoreError, lock};
 
 use crate::{
     core::{
@@ -53,11 +53,11 @@ impl BlockMiner {
         }
     }
 
-    pub fn mine_block(&self, header: Header, txs: Vec<Transaction>) -> Block {
-        let mut block = Block::new(header, txs);
+    pub fn mine_block(&self, header: Header, txs: Vec<Transaction>) -> Result<Block, CoreError> {
+        let mut block = Block::new(header, txs)?;
         info!(
             "create new block in MINER {:}, num txs: {}, with height: {}",
-            block.hash,
+            block.header().hash(),
             block.num_txs(),
             block.height()
         );
@@ -65,7 +65,7 @@ impl BlockMiner {
         if let Err(e) = block.sign(&self.private_key) {
             warn!("unable to sign block in miner: {e}")
         }
-        block
+        Ok(block)
     }
 }
 
@@ -202,16 +202,16 @@ impl ChainNode {
                         if let Some(last_block) = chain.last_block() {
                             let height = chain.height() + 1;
                             let prev_hash = last_block.hash().clone();
-                            let hash = Block::generate_block_hash(&txs);
+                            let hash = Block::generate_block_hash(&txs).unwrap();
                             let header = Header::new(height, hash, prev_hash);
 
                             // if !txs.is_empty() {
                             // get block from miner
-                            let block = miner.mine_block(header, txs);
-
-                            // add block to blockchain
-                            if let Err(e) = chain.add_block(block) {
-                                warn!("unable to add block in Node::spawn_miner_thread: {e}");
+                            if let Ok(block) = miner.mine_block(header, txs) {
+                                // add block to blockchain
+                                if let Err(e) = chain.add_block(block) {
+                                    warn!("unable to add block in Node::spawn_miner_thread: {e}");
+                                }
                             }
                         } else {
                             warn!("unable to get last block chain in Node::spawn_miner_thread");

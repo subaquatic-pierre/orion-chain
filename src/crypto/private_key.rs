@@ -52,8 +52,7 @@ impl ByteEncoding<PrivateKey> for PrivateKey {
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        todo!()
-        // Ok(bincode::serialize(&self)?)
+        Ok(self.key.to_bytes().to_vec())
     }
 }
 

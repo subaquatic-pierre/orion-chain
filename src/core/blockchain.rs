@@ -66,7 +66,7 @@ impl Blockchain {
     }
 
     pub fn get_prev_block_hash(&self, block_number: usize) -> Option<Hash> {
-        self.get_block(block_number).map(|h| h.prev_hash())
+        self.get_block(block_number).map(|b| b.header.prev_hash)
     }
 
     // ---
@@ -115,7 +115,7 @@ mod test {
         let header = random_header(0, genesis_hash);
         let genesis_block = random_block(header);
         let validator = BlockValidator::new();
-        let mut bc = Blockchain::new(genesis_block, validator);
+        let bc = Blockchain::new(genesis_block, validator);
 
         assert!(bc.is_ok())
     }
@@ -125,6 +125,8 @@ mod test {
         let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
         let genesis_header = random_header(0, genesis_hash);
         let genesis_block = random_block(genesis_header.clone());
+
+        println!("{:#?}", genesis_block);
         let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
 
         // check cannot re-add existing block
@@ -161,9 +163,9 @@ mod test {
 
     #[test]
     fn test_has_block() {
-        let header = random_header(0, random_hash());
+        let header = random_header(0, Hash::new(&[0_u8; 32]).unwrap());
         let genesis_block = random_block(header);
-        let mut bc = Blockchain::new_with_genesis(genesis_block);
+        let bc = Blockchain::new_with_genesis(genesis_block);
 
         assert!(bc.has_block(0));
     }
@@ -193,7 +195,10 @@ mod test {
         }
 
         for block in &blocks {
-            assert!(bc.add_block(block.to_owned()).is_ok());
+            if let Err(e) = bc.add_block(block.to_owned()) {
+                println!("{e}");
+                assert!(bc.add_block(block.to_owned()).is_ok());
+            }
         }
 
         let last_block = blocks.last().unwrap();

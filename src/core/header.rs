@@ -13,10 +13,13 @@ use crate::crypto::{hash::Hash, utils::random_hash};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
     pub version: u8,
-    hash: Hash,
-    prev_hash: Hash,
+    pub hash: Hash,
+    pub prev_hash: Hash,
     pub height: usize,
     pub timestamp: u64,
+    // TODO: Handle nonce and difficulty correctly
+    pub difficulty: u8,
+    pub nonce: usize,
 }
 
 impl Header {
@@ -29,6 +32,8 @@ impl Header {
             prev_hash,
             height,
             timestamp,
+            difficulty: 1,
+            nonce: 1,
         }
     }
 
@@ -41,8 +46,7 @@ impl Header {
     }
 
     pub fn hash(&self) -> Hash {
-        // TODO: Handle error checking
-        Hash::sha256(&self.to_bytes().unwrap()).unwrap()
+        self.hash.clone()
     }
 }
 
@@ -178,5 +182,7 @@ pub fn random_header(height: usize, prev_hash: Hash) -> Header {
         prev_hash,
         height,
         timestamp,
+        difficulty: 1,
+        nonce: 1,
     }
 }

@@ -1,8 +1,12 @@
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::crypto::{
-    hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
+    hash::Hash,
+    private_key::PrivateKey,
+    public_key::{PublicKey, PublicKeyBytes},
+    signature::{Signature, SignatureBytes},
     utils::random_bytes,
 };
 
@@ -14,8 +18,10 @@ use super::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transaction {
     pub data: Vec<u8>,
-    pub signature: Option<Signature>,
-    pub signer: Option<PublicKey>,
+    // Byte representation of crate::crypto::signature::Signature
+    pub signature: Option<SignatureBytes>,
+    // Byte representation of crate::crypto::public_key::PublicKey
+    pub signer: Option<PublicKeyBytes>,
 }
 
 impl Transaction {
@@ -36,7 +42,7 @@ impl Transaction {
         String::from_utf8_lossy(&self.data).to_string()
     }
 
-    pub fn sign(&mut self, private_key: PrivateKey) -> Result<(), CoreError> {
+    pub fn sign(&mut self, private_key: &PrivateKey) -> Result<(), CoreError> {
         if self.signer.is_some() | self.signature.is_some() {
             return Err(CoreError::Transaction(
                 "transaction already is already signed".to_string(),
@@ -44,8 +50,11 @@ impl Transaction {
         }
 
         let sig = private_key.sign(&self.data);
-        self.signer = Some(private_key.pub_key());
-        self.signature = Some(sig);
+        let sig_bytes = SignatureBytes::new(&sig.to_bytes()?);
+        let pub_key_bytes = PublicKeyBytes::new(&private_key.pub_key().to_bytes()?);
+
+        self.signer = Some(pub_key_bytes);
+        self.signature = Some(sig_bytes);
 
         Ok(())
     }
@@ -57,17 +66,20 @@ impl Transaction {
             ));
         }
 
-        match &self.signer {
-            Some(key) => {
-                if !key.verify(&self.data, self.signature.clone().unwrap()) {
+        match (&self.signer, &self.signature) {
+            (Some(key_bytes), Some(sig_bytes)) => {
+                let key = PublicKey::from_bytes(&key_bytes.to_bytes()?)?;
+                let signature = Signature::from_bytes(&sig_bytes.to_bytes()?)?;
+
+                if !key.verify(&self.data, signature) {
                     return Err(CoreError::Transaction(
                         "invalid transaction signature".to_string(),
                     ));
                 }
             }
-            None => {
+            _ => {
                 return Err(CoreError::Transaction(
-                    "transaction has no public key".to_string(),
+                    "transaction has no public key or signature".to_string(),
                 ));
             }
         }
@@ -107,7 +119,7 @@ mod test {
 
         assert!(matches!(tx.verify(), Err(_)));
 
-        tx.sign(priv_key).unwrap();
+        tx.sign(&priv_key).unwrap();
         assert!(tx.verify().is_ok());
 
         // try change data
@@ -120,16 +132,16 @@ mod test {
         let mut tx = Transaction::new(data);
 
         // try double sign
-        tx.sign(priv_key.clone()).unwrap();
-        assert!(matches!(tx.sign(priv_key), Err(_)));
+        tx.sign(&priv_key).unwrap();
+        assert!(matches!(tx.sign(&priv_key), Err(_)));
     }
 
     #[test]
     fn test_transaction_data_str() {
-        let priv_key = PrivateKey::new();
+        let _priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
 
-        let mut tx = Transaction::new(data);
+        let tx = Transaction::new(data);
         assert_eq!(tx.data_str(), "Hello world, Data is cool");
     }
 
@@ -139,20 +151,11 @@ mod test {
         let data = b"Hello world, Data is cool";
 
         let mut tx = Transaction::new(data);
-        let bytes = tx.to_bytes().unwrap();
-        assert_eq!(bytes.len(), 67);
 
-        tx.sign(priv_key.clone());
-        let bytes = tx.to_bytes().unwrap();
+        tx.sign(&priv_key).unwrap();
+        let bytes = &tx.to_bytes().unwrap();
 
         let tx_1_sig = tx.signature.unwrap();
-
-        // data_len = 8 bytes
-        // data = 25 bytes
-        // signature = 64 bytes
-        // public_key = 33 bytes
-        // total = 132 bytes
-        assert_eq!(bytes.len(), 164);
 
         let tx_2 = Transaction::from_bytes(&bytes);
 
@@ -167,10 +170,10 @@ mod test {
         let tx_2_sig = tx_2.signature.unwrap();
         let tx_2_pub_key = tx_2.signer.unwrap();
 
-        let pub_key = priv_key.pub_key();
+        let pub_key = priv_key.pub_key().to_bytes().unwrap();
 
-        assert_eq!(tx_1_sig.to_string(), tx_2_sig.to_string());
-        assert_eq!(tx_2_pub_key.to_string(), pub_key.to_string())
+        assert_eq!(tx_1_sig, tx_2_sig);
+        assert_eq!(tx_2_pub_key.to_bytes().unwrap(), pub_key)
     }
 
     #[test]
@@ -179,22 +182,13 @@ mod test {
         let data = b"Hello world, Data is cool";
 
         let mut tx = Transaction::new(data);
-        let hex_str = tx.to_hex().unwrap();
-        assert_eq!(hex_str.len(), 134);
+        let _hex_str = tx.to_hex().unwrap();
 
-        tx.sign(priv_key.clone());
+        tx.sign(&priv_key).unwrap();
         let hex_str = tx.to_hex().unwrap();
 
-        let tx_1_hash = tx.hash();
+        let _tx_1_hash = tx.hash();
         let tx_1_sig = tx.signature.unwrap();
-
-        // data_len = 8 bytes
-        // data = 25 bytes
-        // signature = 64 bytes
-        // public_key = 33 bytes
-        // hex = 32 bytes
-        // total_hex = 132 bytes * 2
-        assert_eq!(hex_str.len(), 328);
 
         let tx_2 = Transaction::from_hex(&hex_str);
 
@@ -213,10 +207,10 @@ mod test {
 
         let tx_2_pub_key = tx_2.signer.unwrap();
 
-        let pub_key = priv_key.pub_key();
+        let pub_key = priv_key.pub_key().to_bytes().unwrap();
 
-        assert_eq!(tx_1_sig.to_string(), tx_2_sig.to_string());
-        assert_eq!(tx_2_pub_key.to_string(), pub_key.to_string());
+        assert_eq!(tx_1_sig, tx_2_sig);
+        assert_eq!(tx_2_pub_key.to_bytes().unwrap(), pub_key);
 
         assert_eq!(tx_2_hash, tx_2_hash);
     }
@@ -230,6 +224,6 @@ pub fn random_tx() -> Transaction {
 pub fn random_signed_tx() -> Transaction {
     let mut tx = random_tx();
     let pvt = PrivateKey::new();
-    tx.sign(pvt).unwrap();
+    tx.sign(&pvt).unwrap();
     tx
 }

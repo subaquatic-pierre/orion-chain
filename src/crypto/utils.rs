@@ -7,5 +7,9 @@ pub fn random_bytes(num_bytes: u32) -> Vec<u8> {
 }
 
 pub fn random_hash() -> Hash {
-    Hash::new(&random_bytes(32)).unwrap()
+    let mut buf = [0_u8; 32];
+    for (i, b) in random_bytes(32).iter().enumerate() {
+        buf[i] = b.clone()
+    }
+    Hash::new(&buf).unwrap()
 }
