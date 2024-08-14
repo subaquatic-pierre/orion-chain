@@ -22,9 +22,11 @@ pub struct BlockJson {
     pub version: u8,
     pub height: usize,
     pub hash: String,
-    pub previous_hash: String,
+    pub prev_hash: String,
     pub timestamp: u64,
     pub txs: TxsJson,
+    // pub nonce: usize,
+    // pub difficulty:
 }
 
 #[derive(Serialize, Deserialize, Debug)]

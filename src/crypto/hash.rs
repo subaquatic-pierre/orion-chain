@@ -1,17 +1,54 @@
+use serde::de::Visitor;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fmt::Display;
 use std::hash::{Hash as StdHash, Hasher};
 use std::ops::Deref;
-
-use serde::{Deserialize, Serialize};
 
 use crate::core::encoding::{ByteEncoding, HexEncoding};
 use crate::core::error::CoreError;
 
 use super::error::CryptoError;
 
-#[derive(Clone, Debug, Ord, Copy, PartialOrd, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, Ord, Copy, PartialOrd)]
 pub struct Hash([u8; 32]);
+
+impl Serialize for Hash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_hex().unwrap())
+    }
+}
+
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(HashVisitor)
+    }
+}
+
+pub struct HashVisitor;
+
+impl<'de> Visitor<'de> for HashVisitor {
+    type Value = Hash;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("&str")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match Hash::from_hex(v) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(E::custom(format!("{e}"))),
+        }
+    }
+}
 
 impl Hash {
     pub fn new(bytes: &[u8; 32]) -> Result<Self, CryptoError> {
@@ -25,7 +62,7 @@ impl Hash {
             buf[i] = b
         }
 
-        Ok(Self { 0: buf })
+        Ok(Self(buf))
     }
 
     pub fn len(&self) -> usize {

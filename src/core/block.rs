@@ -3,6 +3,8 @@ use std::io::Write;
 use log::info;
 use serde::{Deserialize, Serialize};
 
+use crate::crypto::public_key::PublicKeyBytes;
+use crate::crypto::signature::SignatureBytes;
 use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
 };
@@ -121,8 +123,8 @@ impl BlockManager {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub header: Header,
-    signer: Option<PublicKey>,
-    signature: Option<Signature>,
+    signer: Option<PublicKeyBytes>,
+    signature: Option<SignatureBytes>,
     transactions: Vec<Transaction>,
 }
 
@@ -135,7 +137,6 @@ impl Block {
             signature: None,
         };
 
-        // TODO: return result if any transaction is invalid
         for tx in &txs {
             b.add_transaction(tx.clone())?;
         }
@@ -164,11 +165,12 @@ impl Block {
             return Err(CoreError::Block("block already has signature".to_string()));
         }
 
-        let signature = private_key.sign(&self.hashable_data()?);
-        let signer = private_key.pub_key();
+        let sig = private_key.sign(&self.hashable_data()?);
+        let sig_bytes = SignatureBytes::new(&sig.to_bytes()?)?;
+        let pub_key_bytes = PublicKeyBytes::new(&private_key.pub_key().to_bytes()?)?;
 
-        self.signature = Some(signature);
-        self.signer = Some(signer);
+        self.signature = Some(sig_bytes);
+        self.signer = Some(pub_key_bytes);
 
         Ok(())
     }
@@ -184,14 +186,19 @@ impl Block {
             tx.verify()?
         }
 
-        match &self.signer {
-            Some(pub_key) => {
-                match pub_key.verify(&self.hashable_data()?, self.signature.clone().unwrap()) {
+        match (&self.signer, &self.signature) {
+            (Some(key_bytes), Some(sig_bytes)) => {
+                let key = PublicKey::from_bytes(&key_bytes.to_bytes()?)?;
+                let signature = Signature::from_bytes(&sig_bytes.to_bytes()?)?;
+
+                match key.verify(&self.hashable_data()?, &signature) {
                     true => Ok(()),
                     false => Err(CoreError::Block("invalid signature".to_string())),
                 }
             }
-            None => Err(CoreError::Block("no signer exists for block".to_string())),
+            _ => Err(CoreError::Block(
+                "no signer or signature exists for block".to_string(),
+            )),
         }
     }
 
@@ -247,10 +254,29 @@ impl Block {
     // Static methods
     // ---
     // TODO: implement merkle root
-    pub fn generate_block_hash(txs: &[Transaction]) -> Result<Hash, CoreError> {
+    pub fn generate_block_hash(
+        block_height: usize,
+        txs: &[Transaction],
+    ) -> Result<Hash, CoreError> {
+        let merkle_hash: Hash = Block::generate_tx_merkle_hash(txs)?;
+        let mut buf = vec![];
+
+        buf.extend_from_slice(&block_height.to_le_bytes().to_vec());
+        buf.extend_from_slice(&merkle_hash.to_bytes()?);
+
+        Ok(Hash::sha256(&buf)?)
+    }
+
+    pub fn generate_tx_merkle_hash(txs: &[Transaction]) -> Result<Hash, CoreError> {
         let hash: Hash = match txs.len() {
-            0 => Hash::sha256(&[]).unwrap(),
-            1 => Hash::sha256(&[]).unwrap(),
+            0 => Hash::sha256(&[])?,
+            1 => {
+                let mut buf: Vec<u8> = vec![];
+                let tx1_bytes = &txs[0].hash().to_bytes()?;
+                buf.extend_from_slice(&tx1_bytes);
+                buf.extend_from_slice(&tx1_bytes);
+                Hash::sha256(&buf).unwrap()
+            }
             2 => {
                 let mut buf: Vec<u8> = vec![];
                 let tx1_bytes = &txs[0].hash().to_bytes()?;
@@ -260,7 +286,7 @@ impl Block {
                 buf.extend_from_slice(&tx2_bytes);
                 return Ok(Hash::sha256(&buf)?);
             }
-            _ => return Block::generate_block_hash(&txs[..txs.len() - 2]),
+            _ => return Block::generate_tx_merkle_hash(&txs[..txs.len() - 2]),
         };
 
         Ok(hash)
@@ -287,18 +313,27 @@ impl HexEncoding<Block> for Block {
     }
 }
 
-impl JsonEncoding<BlockJson> for Block {
-    fn from_json(data: serde_json::Value) -> Result<BlockJson, CoreError> {
-        todo!()
+impl JsonEncoding<Block> for Block {
+    fn from_json(data: serde_json::Value) -> Result<Block, CoreError> {
+        match serde_json::from_value(data) {
+            Ok(d) => Ok(d),
+            Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
+        }
     }
+
     fn to_json(&self) -> Result<serde_json::Value, CoreError> {
-        todo!()
+        match serde_json::to_value(&self) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use std::io::{BufWriter, Read, Write};
+
+    use serde_json::json;
 
     use crate::crypto::{
         hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
@@ -337,7 +372,7 @@ mod test {
 
         let mut block = Block::new(header, vec![]).unwrap();
 
-        let mut new_tx = Transaction::new(b"Cool World");
+        let mut new_tx = Transaction::new(b"Cool World").unwrap();
         new_tx.sign(&private_key).unwrap();
         block.add_transaction(new_tx).unwrap();
         // block.transactions.push(Transaction::new(b"hello world"));
@@ -349,7 +384,9 @@ mod test {
 
         assert!(block.verify().is_ok());
 
-        block.transactions.push(Transaction::new(b"hello world"));
+        block
+            .transactions
+            .push(Transaction::new(b"hello world").unwrap());
 
         let msg = "transaction has no signature".to_string();
 
@@ -416,6 +453,33 @@ mod test {
         let blocks = manager.blocks();
 
         assert_eq!(headers.len(), blocks.len());
+    }
+
+    #[test]
+    fn test_json_encoding() {
+        let json_block = json!({
+            "header": {
+                "difficulty": 1,
+                "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "height": 274,
+                "nonce": 1,
+                "prev_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "timestamp": 1723630872,
+                "version": 1
+            },
+            "signature": "b61fca1a77dd52e6648101988a06257ca229c1f92df337c08f0a5d1105520ab37066c3edb61d7429947acf2e5eb5dbe546998b105aac9666072a35d1309bfdbb",
+            "signer": "027a527f459ca204f5fac9f187590e9db5f3fdd59a4bca8a3f98441348de43b87a",
+            "transactions": []
+        });
+
+        let block = Block::from_json(json_block).unwrap();
+
+        assert_eq!(block.header.timestamp, 1723630872);
+        let hash =
+            Hash::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+                .unwrap();
+        assert_eq!(block.header.timestamp, 1723630872);
+        assert_eq!(hash, *block.hash())
     }
 }
 

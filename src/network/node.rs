@@ -27,6 +27,7 @@ use crate::{
 
 use super::{
     error::NetworkError,
+    miner::BlockMiner,
     rpc::{RpcHandler, RpcHeader, RPC},
     tx_pool::TxPool,
     types::{Payload, RpcChanMsg},
@@ -36,37 +37,6 @@ use super::{tcp::TcpController, types::ArcMut};
 pub struct NodeConfig {
     pub block_time: time::Duration,
     pub private_key: Option<PrivateKey>,
-}
-
-pub struct BlockMiner {
-    pub last_block_time: Instant,
-    private_key: PrivateKey,
-    pub pool_size: usize,
-}
-
-impl BlockMiner {
-    pub fn new(private_key: PrivateKey, pool_size: usize) -> Self {
-        Self {
-            last_block_time: Instant::now(),
-            private_key,
-            pool_size,
-        }
-    }
-
-    pub fn mine_block(&self, header: Header, txs: Vec<Transaction>) -> Result<Block, CoreError> {
-        let mut block = Block::new(header, txs)?;
-        info!(
-            "create new block in MINER {:}, num txs: {}, with height: {}",
-            block.header().hash(),
-            block.num_txs(),
-            block.height()
-        );
-
-        if let Err(e) = block.sign(&self.private_key) {
-            warn!("unable to sign block in miner: {e}")
-        }
-        Ok(block)
-    }
 }
 
 pub struct ChainNode {
@@ -200,14 +170,8 @@ impl ChainNode {
 
                     if let Ok(mut chain) = chain.lock() {
                         if let Some(last_block) = chain.last_block() {
-                            let height = chain.height() + 1;
-                            let prev_hash = last_block.hash().clone();
-                            let hash = Block::generate_block_hash(&txs).unwrap();
-                            let header = Header::new(height, hash, prev_hash);
-
-                            // if !txs.is_empty() {
                             // get block from miner
-                            if let Ok(block) = miner.mine_block(header, txs) {
+                            if let Ok(block) = miner.mine_block(last_block.header(), txs) {
                                 // add block to blockchain
                                 if let Err(e) = chain.add_block(block) {
                                     warn!("unable to add block in Node::spawn_miner_thread: {e}");

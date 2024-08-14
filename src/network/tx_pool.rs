@@ -62,7 +62,7 @@ mod test {
     fn test_flush() {
         let mut tx_pool = TxPool::new();
 
-        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i])).collect();
+        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i]).unwrap()).collect();
 
         for tx in txs {
             tx_pool.add(tx);
@@ -79,7 +79,7 @@ mod test {
     fn test_take_txs() {
         let mut tx_pool = TxPool::new();
 
-        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i])).collect();
+        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i]).unwrap()).collect();
 
         for tx in txs {
             tx_pool.add(tx);
@@ -89,12 +89,12 @@ mod test {
 
         assert_eq!(txs.len(), 3);
 
-        let tx = Transaction::new(&[1]);
+        let tx = Transaction::new(&[1]).unwrap();
         assert_eq!(txs.contains(&tx), true);
-        let tx = Transaction::new(&[4]);
+        let tx = Transaction::new(&[4]).unwrap();
         assert_eq!(txs.contains(&tx), false);
 
-        let tx = Transaction::new(&[1]);
+        let tx = Transaction::new(&[1]).unwrap();
         assert_eq!(tx_pool.len(), 17);
         assert_eq!(tx_pool.has(&tx), false);
     }

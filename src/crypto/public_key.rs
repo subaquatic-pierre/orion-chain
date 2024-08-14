@@ -1,7 +1,10 @@
 use ecdsa::{signature::Verifier, VerifyingKey};
 use k256::Secp256k1;
-use serde::{Deserialize, Serialize};
-use std::{fmt::Display, ops::Deref};
+use serde::{de::Visitor, Deserialize, Serialize};
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    ops::Deref,
+};
 
 use crate::core::{
     encoding::{ByteEncoding, HexEncoding},
@@ -34,7 +37,7 @@ impl PublicKey {
         Ok(Address::from_bytes(&addr_bytes)?)
     }
 
-    pub fn verify(&self, msg: &[u8], signature: Signature) -> bool {
+    pub fn verify(&self, msg: &[u8], signature: &Signature) -> bool {
         if self.key.verify(msg, &signature.inner).is_err() {
             return false;
         };
@@ -88,42 +91,86 @@ impl From<PublicKeyBytes> for PublicKey {
     }
 }
 
-// impl From<PublicKey> for PublicKeyBytes {
-//     fn from(value: PublicKey) -> Self {
-//         Self::from_bytes(&value.to_bytes().unwrap()).unwrap()
-//     }
-// }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PublicKeyBytes {
-    #[serde(with = "serde_bytes")]
-    inner: [u8; 33],
-}
+#[derive(Debug, Clone, PartialEq)]
+pub struct PublicKeyBytes([u8; 33]);
 
 impl PublicKeyBytes {
-    pub fn new(data: &[u8]) -> Self {
+    pub fn new(data: &[u8]) -> Result<Self, CoreError> {
         let mut buf = [0_u8; 33];
+
+        if data.len() != 33 {
+            return Err(CoreError::Parsing(
+                "incorrect data length for new PublicKeyBytes".to_string(),
+            ));
+        }
         for (i, b) in data.iter().enumerate() {
             buf[i] = b.clone();
         }
-        Self { inner: buf }
+        Ok(Self(buf))
+    }
+}
+
+impl Serialize for PublicKeyBytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_hex().unwrap())
+    }
+}
+pub struct PublicKeyBytesVisitor;
+
+impl<'de> Deserialize<'de> for PublicKeyBytes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(PublicKeyBytesVisitor)
+    }
+}
+
+impl<'de> Visitor<'de> for PublicKeyBytesVisitor {
+    type Value = PublicKeyBytes;
+    fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
+        formatter.write_str("Hex &str value")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match PublicKeyBytes::from_hex(v) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(E::custom(format!("{e}"))),
+        }
     }
 }
 
 impl ByteEncoding<PublicKeyBytes> for PublicKeyBytes {
     fn from_bytes(data: &[u8]) -> Result<PublicKeyBytes, CoreError> {
-        Ok(PublicKeyBytes::new(data))
+        Ok(PublicKeyBytes::new(data)?)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(self.inner.to_vec())
+        Ok(self.0.to_vec())
+    }
+}
+
+impl HexEncoding<PublicKeyBytes> for PublicKeyBytes {
+    fn from_hex(data: &str) -> Result<PublicKeyBytes, CoreError> {
+        let bytes = hex::decode(data)?;
+        PublicKeyBytes::new(&bytes)
+    }
+
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
 }
 
 impl Deref for PublicKeyBytes {
     type Target = [u8; 33];
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 

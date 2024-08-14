@@ -13,11 +13,12 @@ use crate::{
         block::Block, blockchain::Blockchain, encoding::ByteEncoding, error::CoreError,
         header::Header, transaction::Transaction,
     },
+    crypto::private_key::PrivateKey,
     lock,
 };
 
 use super::{
-    error::NetworkError, node::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
+    error::NetworkError, miner::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -69,34 +70,6 @@ impl ByteEncoding<RPC> for RPC {
         Ok(bincode::deserialize(data)?)
     }
 }
-
-// impl ByteDecoding for RPC {
-//     type Error = NetworkError;
-//     type Target = RPC;
-
-//     fn from_bytes(data: &[u8]) -> Result<RPC, NetworkError> {
-//         if data.is_empty() {
-//             return Err(NetworkError::Decoding(
-//                 "empty bytes passed to RPC decoding".to_string(),
-//             ));
-//         }
-
-//         if data.len() < 2 {
-//             return Err(NetworkError::Decoding(
-//                 "incorrect header bytes passed to RPC decoding".to_string(),
-//             ));
-//         }
-
-//         let buf: [u8; 2] = [data[0], data[1]];
-
-//         let header = RpcHeader::from(u16::from_be_bytes(buf));
-
-//         Ok(RPC {
-//             header,
-//             payload: data[2..].to_vec(),
-//         })
-//     }
-// }
 
 pub struct RpcHandler {
     mem_pool: Arc<Mutex<TxPool>>,
@@ -286,13 +259,15 @@ impl RpcHandler {
         let tx = Transaction::from_bytes(&payload);
 
         match tx {
-            Ok(tx) => {
+            Ok(mut tx) => {
+                let key = PrivateKey::new();
+                tx.sign(&key)?;
                 if let Ok(mut mem_pool) = self.mem_pool.lock() {
                     mem_pool.add(tx.clone());
-                    // debug!(
-                    //     "adding transaction to the mem_pool in RpcHandler, hash: {}",
-                    //     tx.hash().to_string()
-                    // );
+                    debug!(
+                        "adding transaction to the mem_pool in RpcHandler, hash: {}",
+                        tx.hash()
+                    );
                     Ok(tx)
                 } else {
                     Err(NetworkError::RPC(

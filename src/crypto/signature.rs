@@ -1,9 +1,12 @@
 use bytes::Bytes;
 use ecdsa::Signature as ECDASignature;
 use k256::Secp256k1;
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, Deserialize, Serialize};
 use serde_with::{serde_as, SerializeAs};
-use std::{fmt::Display, ops::Deref};
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    ops::Deref,
+};
 
 use crate::core::{
     encoding::{ByteEncoding, HexEncoding},
@@ -21,37 +24,87 @@ impl Signature {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SignatureBytes {
-    #[serde(with = "serde_bytes")]
-    inner: [u8; 64],
-}
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignatureBytes([u8; 64]);
 
 impl SignatureBytes {
-    pub fn new(data: &[u8]) -> Self {
+    pub fn new(data: &[u8]) -> Result<Self, CoreError> {
+        if data.len() != 64 {
+            return Err(CoreError::Parsing(
+                "incorrect data length for new SignatureBytes".to_string(),
+            ));
+        }
+
         let mut buf = [0_u8; 64];
         for (i, b) in data.iter().enumerate() {
             buf[i] = b.clone()
         }
 
-        Self { inner: buf }
+        Ok(Self(buf))
     }
 }
 
-impl ByteEncoding<Signature> for SignatureBytes {
-    fn from_bytes(data: &[u8]) -> Result<Signature, CoreError> {
-        Signature::from_bytes(data)
+impl Serialize for SignatureBytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_hex().unwrap())
+    }
+}
+pub struct SignatureBytesVisitor;
+
+impl<'de> Deserialize<'de> for SignatureBytes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(SignatureBytesVisitor)
+    }
+}
+
+impl<'de> Visitor<'de> for SignatureBytesVisitor {
+    type Value = SignatureBytes;
+    fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
+        formatter.write_str("Hex &str value")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match SignatureBytes::from_hex(v) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(E::custom(format!("{e}"))),
+        }
+    }
+}
+
+impl ByteEncoding<SignatureBytes> for SignatureBytes {
+    fn from_bytes(data: &[u8]) -> Result<SignatureBytes, CoreError> {
+        SignatureBytes::new(data)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(self.inner.to_vec())
+        Ok(self.0.to_vec())
+    }
+}
+
+impl HexEncoding<SignatureBytes> for SignatureBytes {
+    fn from_hex(data: &str) -> Result<SignatureBytes, CoreError> {
+        let bytes = hex::decode(data)?;
+        SignatureBytes::new(&bytes)
+    }
+
+    fn to_hex(&self) -> Result<String, CoreError> {
+        Ok(hex::encode(&self.to_bytes()?))
     }
 }
 
 impl Deref for SignatureBytes {
     type Target = [u8; 64];
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
@@ -65,8 +118,6 @@ impl HexEncoding<Signature> for Signature {
                 "unable to generate signature from bytes: {e}"
             ))),
         }
-
-        // Ok(Self::from_bytes(&hex::decode(data)?)?)
     }
 
     fn to_hex(&self) -> Result<String, CoreError> {

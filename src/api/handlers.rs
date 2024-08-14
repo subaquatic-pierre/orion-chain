@@ -141,7 +141,7 @@ pub async fn new_tx(
 
     let byte_data = to_bytes(&data.unwrap())?;
 
-    let new_tx = Transaction::new(&byte_data);
+    let new_tx = Transaction::new(&byte_data)?;
 
     debug!("NEW TX REQ :{new_tx:?}",);
 

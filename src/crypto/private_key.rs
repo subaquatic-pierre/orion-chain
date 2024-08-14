@@ -106,9 +106,9 @@ mod test {
         let msg = b"Hello world";
 
         let sig = pvt_key.sign(msg);
-        let is_valid = pub_key.verify(msg, sig.clone());
+        let is_valid = pub_key.verify(msg, &sig);
 
-        let not_valid = pub_key_2.verify(msg, sig);
+        let not_valid = pub_key_2.verify(msg, &sig);
 
         assert_eq!(is_valid, true);
         assert_eq!(not_valid, false);
