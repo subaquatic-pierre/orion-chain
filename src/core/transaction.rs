@@ -1,5 +1,6 @@
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use serde_with::base64::{Base64, Bcrypt, BinHex, Standard};
 use serde_with::serde_as;
 
 use crate::crypto::{
@@ -15,8 +16,10 @@ use super::{
     error::CoreError,
 };
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transaction {
+    #[serde_as(as = "Base64")]
     pub data: Vec<u8>,
     pub hash: Hash,
     pub signature: Option<SignatureBytes>,

@@ -78,7 +78,7 @@ pub async fn get_block(
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
-            let data = block.to_json()?;
+            let data = json!({ "block": block });
             json!({ "data": data })
         }
         RpcHandlerResponse::Generic(string) => json!({ "error": string }),
@@ -114,7 +114,7 @@ pub async fn get_tx(
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
             let data = json!({
-                "hash": tx.hash().to_string(),
+                "tx": tx,
             });
             json!({ "data": data })
         }
@@ -155,7 +155,7 @@ pub async fn new_tx(
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
             let data = json!({
-                "hash": tx.hash().to_string(),
+                "tx": tx,
             });
             json!({ "data": data })
         }
