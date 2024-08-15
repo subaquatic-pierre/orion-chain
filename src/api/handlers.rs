@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use hyper::{body::Incoming as IncomingBody, Request, Response, StatusCode};
 use log::debug;
 use serde_json::json;
 
 use super::{
-    types::{ArcRcpHandler, BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
+    types::{BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
     util::{json_response, parse_body, to_bytes},
 };
 use crate::api::types::{BlockJson, TxsJson};
@@ -16,7 +18,7 @@ use crate::rpc::{
     types::{RpcHandlerResponse, RpcHeader, RPC},
 };
 pub async fn get_block_header(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<GetBlockReq>(req).await;
@@ -36,7 +38,7 @@ pub async fn get_block_header(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Header(header) => {
@@ -53,7 +55,7 @@ pub async fn get_block_header(
 }
 
 pub async fn get_block(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<GetBlockReq>(req).await;
@@ -73,7 +75,7 @@ pub async fn get_block(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
@@ -88,7 +90,7 @@ pub async fn get_block(
 }
 
 pub async fn get_tx(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<GetTxReq>(req).await;
@@ -108,7 +110,7 @@ pub async fn get_tx(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
@@ -125,7 +127,7 @@ pub async fn get_tx(
 }
 
 pub async fn new_tx(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<NewTxReq>(req).await;
@@ -149,7 +151,7 @@ pub async fn new_tx(
         payload: new_tx.to_bytes()?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {
@@ -166,7 +168,7 @@ pub async fn new_tx(
 }
 
 pub async fn get_last_block(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<GenericReq>(req).await;
@@ -186,7 +188,7 @@ pub async fn get_last_block(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Block(block) => {
@@ -201,7 +203,7 @@ pub async fn get_last_block(
 }
 
 pub async fn get_chain_height(
-    handler: &ArcRcpHandler,
+    handler: Arc<RpcController>,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     let data = parse_body::<GenericReq>(req).await;
@@ -221,7 +223,7 @@ pub async fn get_chain_height(
         payload: to_bytes(&data)?,
     };
 
-    let res = handler.lock().unwrap().handle_client_rpc(&rpc)?;
+    let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
         RpcHandlerResponse::Transaction(tx) => {

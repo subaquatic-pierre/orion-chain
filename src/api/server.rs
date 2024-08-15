@@ -11,12 +11,11 @@ use log::{error, info, warn};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+use crate::rpc::controller::RpcController;
+
 use super::types::ArcRcpHandler;
 
 use super::tokio_util::TokioIo;
-use crate::core::block::random_signed_block;
-use crate::lock;
-use crate::network::node::ChainNode;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
@@ -31,11 +30,12 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 use super::router::HttpRouter;
 
 pub struct ApiServer {
+    // router: Arc<Mutex<HttpRouter>>,
     router: Arc<Mutex<HttpRouter>>,
 }
 
 impl ApiServer {
-    pub fn new(rpc_handler: ArcRcpHandler) -> Self {
+    pub fn new(rpc_handler: Arc<RpcController>) -> Self {
         let router = Arc::new(Mutex::new(HttpRouter::new(rpc_handler)));
 
         Self { router }

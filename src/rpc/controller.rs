@@ -60,8 +60,6 @@ impl RpcController {
         rpc: &RPC,
         _peer_addr: Option<SocketAddr>,
     ) -> Result<RpcHandlerResponse, NetworkError> {
-        // TODO: handle all RPC header types
-        let payload = rpc.payload.clone();
         match rpc.header {
             RpcHeader::GetBlock => {
                 debug!("rpc message received in handler at RpcHeader::GetBlock");

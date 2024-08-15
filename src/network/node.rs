@@ -51,7 +51,7 @@ pub struct ChainNode {
     mem_pool: ArcMut<TxPool>,
     miner: ArcMut<BlockMiner>,
     pub chain: ArcMut<Blockchain>,
-    rpc_handler: ArcMut<RpcController>,
+    rpc_controller: Arc<RpcController>,
 }
 
 impl ChainNode {
@@ -74,13 +74,13 @@ impl ChainNode {
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
 
-        let rpc_handler = RpcController::new(
+        let rpc_controller = RpcController::new(
             mem_pool.clone(),
             miner.clone(),
             chain.clone(),
             tcp_controller.clone(),
         );
-        let rpc_handler = ArcMut::new(rpc_handler);
+        let rpc_controller = Arc::new(rpc_controller);
 
         Self {
             rpc_rx,
@@ -90,7 +90,7 @@ impl ChainNode {
             miner,
             chain,
             tcp_controller,
-            rpc_handler,
+            rpc_controller,
         }
     }
 
@@ -113,8 +113,8 @@ impl ChainNode {
         // launches all threads need to communicate with peers
         // all messages received from peers are send back on self.rpc_tx
         // chanel which is handled by RpcController struct withing api module
-        let controller = self.tcp_controller.clone();
-        let mut tcp = lock!(controller);
+        let tcp_controller = self.tcp_controller.clone();
+        let mut tcp = lock!(tcp_controller);
         // TODO: get peer addresses from config
         tcp.start(vec![]);
 
@@ -130,8 +130,8 @@ impl ChainNode {
     }
 
     // Get the a ArcMut of RPC handler
-    pub fn rpc_handler(&self) -> Arc<Mutex<RpcController>> {
-        self.rpc_handler.clone()
+    pub fn rpc_controller(&self) -> Arc<RpcController> {
+        self.rpc_controller.clone()
     }
 
     pub fn rpc_tx(&self) -> Arc<Mutex<Sender<RpcChanMsg>>> {
@@ -142,17 +142,15 @@ impl ChainNode {
     // Private Methods
     // ---
     // Main thread that listens for RPC messages from peers,
-    // messages are then handled by rpc_handler
+    // messages are then handled by rpc_controller
     fn spawn_peer_rpc_thread(&self) {
         let rpc_rx = self.rpc_rx.clone();
-        let handler = self.rpc_handler();
+        let handler = self.rpc_controller();
 
         // Spawn thread to handle message, main RPC handler thread
         thread::spawn(move || {
             let rpc_rx = lock!(rpc_rx);
             for (peer_addr, rpc) in rpc_rx.iter() {
-                let handler = lock!(handler);
-
                 if let Err(e) = handler.handle_rpc(&rpc, Some(peer_addr)) {
                     error!("{e}");
                 }

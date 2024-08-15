@@ -51,6 +51,6 @@ async fn main() -> Result<()> {
     // Create main entry point for HTTP API server for the node,
     // pass in Arc of ChainNode to access blockchain functionality
     // within the Api
-    let server = ApiServer::new(chain_node.rpc_handler());
+    let server = ApiServer::new(chain_node.rpc_controller());
     server.start().await
 }
