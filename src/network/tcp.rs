@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
 
-use crate::api::rpc::RPC;
 use crate::core::encoding::ByteEncoding;
 use crate::core::util::timestamp;
 use crate::lock;
 use crate::network::error::NetworkError;
+use crate::rpc::types::RPC;
 
 use super::types::RpcChanMsg;
 use super::{

@@ -6,15 +6,15 @@ use super::{
     types::{ArcRcpHandler, BoxBody, GenericReq, GetBlockReq, GetTxReq, NewTxReq, Result},
     util::{json_response, parse_body, to_bytes},
 };
+use crate::api::types::{BlockJson, TxsJson};
 use crate::core::{
     encoding::{ByteEncoding, JsonEncoding},
     transaction::Transaction,
 };
-use crate::{
-    api::rpc::{RpcHandlerResponse, RpcHeader, RPC},
-    api::types::{BlockJson, TxsJson},
+use crate::rpc::{
+    controller::RpcController,
+    types::{RpcHandlerResponse, RpcHeader, RPC},
 };
-
 pub async fn get_block_header(
     handler: &ArcRcpHandler,
     req: Request<IncomingBody>,
@@ -41,8 +41,7 @@ pub async fn get_block_header(
     let data = match res {
         RpcHandlerResponse::Header(header) => {
             let data = json!({
-                "hash":header.hash().to_string(),
-                "prev_hash":header.prev_hash().to_string()
+                "header": header
             });
             json!({ "data": data })
         }

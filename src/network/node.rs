@@ -14,8 +14,12 @@ use log::{error, info, warn};
 
 use crate::{core::error::CoreError, lock};
 
+use crate::rpc::{
+    controller::RpcController,
+    types::{RpcHandlerResponse, RpcHeader, RPC},
+};
+
 use crate::{
-    api::rpc::{RpcHandler, RpcHeader, RPC},
     core::{
         block::Block,
         blockchain::Blockchain,
@@ -47,7 +51,7 @@ pub struct ChainNode {
     mem_pool: ArcMut<TxPool>,
     miner: ArcMut<BlockMiner>,
     pub chain: ArcMut<Blockchain>,
-    rpc_handler: ArcMut<RpcHandler>,
+    rpc_handler: ArcMut<RpcController>,
 }
 
 impl ChainNode {
@@ -70,7 +74,7 @@ impl ChainNode {
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
 
-        let rpc_handler = RpcHandler::new(
+        let rpc_handler = RpcController::new(
             mem_pool.clone(),
             miner.clone(),
             chain.clone(),
@@ -108,7 +112,7 @@ impl ChainNode {
         // Start TcpController
         // launches all threads need to communicate with peers
         // all messages received from peers are send back on self.rpc_tx
-        // chanel which is handled by RpcHandler struct withing api module
+        // chanel which is handled by RpcController struct withing api module
         let controller = self.tcp_controller.clone();
         let mut tcp = lock!(controller);
         // TODO: get peer addresses from config
@@ -126,7 +130,7 @@ impl ChainNode {
     }
 
     // Get the a ArcMut of RPC handler
-    pub fn rpc_handler(&self) -> Arc<Mutex<RpcHandler>> {
+    pub fn rpc_handler(&self) -> Arc<Mutex<RpcController>> {
         self.rpc_handler.clone()
     }
 

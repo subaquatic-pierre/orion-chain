@@ -10,6 +10,7 @@ pub mod api;
 pub mod core;
 pub mod crypto;
 pub mod network;
+pub mod rpc;
 pub mod util;
 
 use std::{
@@ -18,14 +19,18 @@ use std::{
     thread, time,
 };
 
-use crate::api::rpc::{RpcHandler, RpcHeader, RPC};
 use crate::core::transaction::random_signed_tx;
 use crate::core::{block::random_block, blockchain::Blockchain, header::random_header};
 use crate::network::{
     node::{ChainNode, NodeConfig},
     types::RpcChanMsg,
 };
-use crate::{api::rpc::RpcHandlerResponse, core::encoding::ByteEncoding};
+use crate::rpc::{
+    controller::RpcController,
+    types::{RpcHandlerResponse, RpcHeader, RPC},
+};
+
+use crate::core::encoding::ByteEncoding;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
@@ -52,7 +57,7 @@ pub fn logger_init() {
     });
 }
 
-pub fn transaction_tester_thread(handler: Arc<Mutex<RpcHandler>>) {
+pub fn transaction_tester_thread(handler: Arc<Mutex<RpcController>>) {
     thread::spawn(move || loop {
         // TODO: Remove this thread, only used to add
         // transactions every 2 seconds for testing
@@ -70,10 +75,10 @@ pub fn transaction_tester_thread(handler: Arc<Mutex<RpcHandler>>) {
             if let Ok(res) = handler.handle_client_rpc(&rpc) {
                 match res {
                     RpcHandlerResponse::Generic(msg) => {
-                        warn!("incorrect generic response from RpcHandler: {msg}");
+                        warn!("incorrect generic response from RpcController: {msg}");
                     }
                     RpcHandlerResponse::Transaction(tx) => {
-                        // info!("transaction successfully received from RpcHandler");
+                        // info!("transaction successfully received from RpcController");
                     }
                     _ => {
                         warn!("unable to handle rpc in transaction_tester_thread");

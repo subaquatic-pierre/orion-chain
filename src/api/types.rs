@@ -1,4 +1,3 @@
-use crate::api::rpc::RpcHandler;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -6,8 +5,9 @@ use std::sync::{Arc, Mutex};
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
+use crate::rpc::controller::RpcController;
 
-pub type ArcRcpHandler = Arc<Mutex<RpcHandler>>;
+pub type ArcRcpHandler = Arc<Mutex<RpcController>>;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

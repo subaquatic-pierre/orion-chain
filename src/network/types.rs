@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use crate::api::rpc::RPC;
+use crate::rpc::types::RPC;
 
 pub type NetAddr = String;
 pub type Payload = Vec<u8>;

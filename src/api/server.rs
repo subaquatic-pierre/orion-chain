@@ -11,7 +11,6 @@ use log::{error, info, warn};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use super::rpc::RpcHandler;
 use super::types::ArcRcpHandler;
 
 use super::tokio_util::TokioIo;
