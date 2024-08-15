@@ -9,8 +9,6 @@ use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
 };
 
-use crate::api::types::BlockJson;
-
 use super::{
     encoding::{ByteEncoding, HexEncoding, JsonEncoding},
     error::CoreError,
@@ -18,6 +16,7 @@ use super::{
     storage::{MemoryStorage, Storage},
     transaction::Transaction,
 };
+
 #[derive(Clone, Debug)]
 struct HeaderPointer(*const Header);
 

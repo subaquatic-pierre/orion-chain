@@ -1,6 +1,10 @@
-use std::{error::Error, fmt::Display};
-
 use crate::core::error::CoreError;
+use actix_web::{
+    body::BoxBody, error::ResponseError, http::StatusCode, web::Json, HttpResponse, Responder,
+};
+use serde_json::json;
+
+use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
 pub enum NetworkError {
@@ -28,5 +32,22 @@ impl Display for NetworkError {
 impl From<CoreError> for NetworkError {
     fn from(value: CoreError) -> Self {
         NetworkError::RPC(format!("{value}"))
+    }
+}
+
+impl Responder for NetworkError {
+    type Body = BoxBody;
+    fn respond_to(self, _req: &actix_web::HttpRequest) -> HttpResponse<Self::Body> {
+        let message = match self {
+            NetworkError::Connect(msg) => msg,
+            NetworkError::NotFound(msg) => msg,
+            NetworkError::Message(msg) => msg,
+            NetworkError::Decoding(msg) => msg,
+            NetworkError::RPC(msg) => msg,
+        };
+
+        let status = StatusCode::from_u16(403).unwrap_or(StatusCode::BAD_REQUEST);
+
+        HttpResponse::build(status).json(json!({"error": message}))
     }
 }

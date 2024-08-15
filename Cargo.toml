@@ -37,5 +37,6 @@ url = "2.2"
 http = "0.2"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 actix-web = "4.9.0"
+actix-cors = "0.7.0"
 
 

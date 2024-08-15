@@ -52,5 +52,10 @@ async fn main() -> Result<()> {
     // pass in Arc of ChainNode to access blockchain functionality
     // within the Api
     let server = ApiServer::new(chain_node.rpc_controller());
-    server.start().await
+    server
+        .start()
+        .await
+        .expect("Unable to start server")
+        .await?;
+    Ok(())
 }

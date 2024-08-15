@@ -1,3 +1,7 @@
+use actix_web::{
+    body::BoxBody, error::ResponseError, http::StatusCode, web::Json, HttpResponse, Responder,
+};
+use serde_json::json;
 use std::{convert, error::Error, fmt::Display, io};
 
 use crate::crypto::error::CryptoError;
@@ -51,5 +55,22 @@ impl From<hex::FromHexError> for CoreError {
 impl From<io::ErrorKind> for CoreError {
     fn from(value: io::ErrorKind) -> Self {
         CoreError::Parsing(format!("{value}"))
+    }
+}
+
+impl Responder for CoreError {
+    type Body = BoxBody;
+    fn respond_to(self, _req: &actix_web::HttpRequest) -> HttpResponse<Self::Body> {
+        let message = match self {
+            Self::Serialize(msg) => msg,
+            Self::Parsing(msg) => msg,
+            Self::Transaction(msg) => msg,
+            Self::Block(msg) => msg,
+            Self::CryptoError(msg) => msg,
+        };
+
+        let status = StatusCode::from_u16(403).unwrap_or(StatusCode::BAD_REQUEST);
+
+        HttpResponse::build(status).json(json!({"error": message}))
     }
 }

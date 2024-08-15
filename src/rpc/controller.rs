@@ -8,12 +8,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::types::GetBlockReq,
-    core::{
-        block::Block, blockchain::Blockchain, encoding::ByteEncoding, error::CoreError,
-        header::Header, transaction::Transaction,
-    },
-    crypto::private_key::PrivateKey,
+    core::{block::Block, blockchain::Blockchain, encoding::ByteEncoding, error::CoreError},
     lock,
     rpc::handlers::{
         block::{get_block, get_block_header, get_last_block},

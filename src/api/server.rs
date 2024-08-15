@@ -1,9 +1,14 @@
+use actix_cors::Cors;
+use actix_web::dev::Server;
+use actix_web::middleware::Logger;
+use actix_web::{http::header, web, App, HttpServer, Scope};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use std::thread;
 use std::time;
 
+use actix_web::web::Data;
 use bytes::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -13,9 +18,7 @@ use tokio::sync::Mutex;
 
 use crate::rpc::controller::RpcController;
 
-use super::types::ArcRcpHandler;
-
-use super::tokio_util::TokioIo;
+use super::router::register_all_routes;
 
 pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
@@ -27,40 +30,49 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 // pub static POST_DATA: &str = r#"{"original": "data"}"#;
 // pub static URL: &str = "http://127.0.0.1:1337/json_api";
 
-use super::router::HttpRouter;
+pub struct ApiServerConfig {}
+
+pub struct ApiServerData {
+    pub config: ApiServerConfig,
+    pub rpc_controller: Arc<RpcController>,
+}
 
 pub struct ApiServer {
     // router: Arc<Mutex<HttpRouter>>,
-    router: Arc<Mutex<HttpRouter>>,
+    data: Data<ApiServerData>,
 }
 
 impl ApiServer {
-    pub fn new(rpc_handler: Arc<RpcController>) -> Self {
-        let router = Arc::new(Mutex::new(HttpRouter::new(rpc_handler)));
+    pub fn new(rpc_controller: Arc<RpcController>) -> Self {
+        let data = Data::new(ApiServerData {
+            config: ApiServerConfig {},
+            rpc_controller,
+        });
 
-        Self { router }
+        Self { data }
     }
 
-    pub async fn start(&self) -> Result<()> {
-        let addr: SocketAddr = "127.0.0.1:1337".parse().unwrap();
+    pub async fn start(&self) -> Result<Server> {
+        let data = self.data.clone();
+        let server = HttpServer::new(move || {
+            let cors = Cors::default()
+                .allow_any_origin()
+                .send_wildcard()
+                .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE"])
+                .allowed_headers(vec![
+                    header::CONTENT_TYPE,
+                    header::AUTHORIZATION,
+                    header::ACCEPT,
+                ]);
 
-        let listener = TcpListener::bind(&addr).await?;
-        info!("client RPC server listening on http://{}", addr);
-
-        loop {
-            let (stream, _) = listener.accept().await?;
-            let io = TokioIo::new(stream);
-
-            let router = self.router.clone();
-
-            tokio::task::spawn(async move {
-                let router = router.lock().await;
-                let service = service_fn(|req| router.route_handler(req));
-
-                if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                    error!("failed to serve connection: {:?}", err);
-                }
-            });
-        }
+            App::new()
+                .app_data(data.clone())
+                .service(register_all_routes())
+                .wrap(Logger::default())
+                .wrap(cors)
+        })
+        .bind("0.0.0.0:8080")?
+        .run();
+        Ok(server)
     }
 }

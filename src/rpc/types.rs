@@ -8,7 +8,6 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::types::GetBlockReq,
     core::{
         block::Block, blockchain::Blockchain, encoding::ByteEncoding, error::CoreError,
         header::Header, transaction::Transaction,

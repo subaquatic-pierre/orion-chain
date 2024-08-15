@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use log::debug;
 
 use crate::{
-    api::types::GetBlockReq,
+    api::routes::block::GetBlockReq,
     core::{
         block::Block, blockchain::Blockchain, encoding::ByteEncoding, header::Header,
         transaction::Transaction,
