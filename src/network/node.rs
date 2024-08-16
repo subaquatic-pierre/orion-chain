@@ -16,7 +16,7 @@ use crate::{core::error::CoreError, lock};
 
 use crate::rpc::{
     controller::RpcController,
-    types::{RpcHandlerResponse, RpcHeader, RPC},
+    types::{RpcResponse, RpcHeader, RPC},
 };
 
 use crate::{

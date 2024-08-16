@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 
 use crate::api::server::ApiServerData;
 use crate::api::util::to_bytes;
-use crate::rpc::types::{RpcHandlerResponse, RpcHeader, RPC};
+use crate::core::encoding::HexEncoding;
+use crate::rpc::types::{RpcHeader, RpcResponse, RPC};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetBlockReq {
@@ -38,11 +39,13 @@ pub async fn get_block(
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Block(block) => {
-            let data = json!({ "block": block });
+        RpcResponse::Block(block) => {
+            // TODO: Make block json format
+            let block_json = block.to_hex()?;
+            let data = json!({ "block": block_json });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 
@@ -70,11 +73,14 @@ pub async fn get_block_header(
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Header(header) => {
-            let data = json!({ "header": header });
+        RpcResponse::Header(header) => {
+            // TODO: Make json format
+            let json = header.to_hex()?;
+
+            let data = json!({ "header": json });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 
@@ -93,11 +99,13 @@ pub async fn get_last_block(app: Data<ApiServerData>) -> Result<HttpResponse, Bo
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Block(block) => {
-            let data = json!({ "block": block });
+        RpcResponse::Block(block) => {
+            // TODO: Make json format
+            let json = block.to_hex()?;
+            let data = json!({ "block": json });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 

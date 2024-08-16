@@ -8,7 +8,7 @@ use actix_web::{delete, get, post, web, HttpRequest, HttpResponse, Responder};
 use serde_json::{json, Value};
 
 use crate::api::server::ApiServerData;
-use crate::rpc::types::{RpcHandlerResponse, RpcHeader, RPC};
+use crate::rpc::types::{RpcHeader, RpcResponse, RPC};
 
 #[get("/height")]
 pub async fn get_chain_height(app: Data<ApiServerData>) -> Result<HttpResponse, Box<dyn Error>> {
@@ -22,11 +22,11 @@ pub async fn get_chain_height(app: Data<ApiServerData>) -> Result<HttpResponse, 
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Block(block) => {
+        RpcResponse::Block(block) => {
             let data = json!({ "height": block.header().height });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 

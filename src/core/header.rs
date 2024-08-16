@@ -1,6 +1,6 @@
-use std::time::SystemTime;
-
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
 
 use super::{
     block::Block,
@@ -10,7 +10,7 @@ use super::{
 };
 use crate::crypto::{hash::Hash, utils::random_hash};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Header {
     pub version: u8,
     pub hash: Hash,
@@ -91,21 +91,33 @@ impl HeaderManager {
 
 impl ByteEncoding<Header> for Header {
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(bincode::serialize(&self)?)
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 
     fn from_bytes(data: &[u8]) -> Result<Header, CoreError> {
-        Ok(bincode::deserialize(data)?)
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 }
 
 impl ByteEncoding<Header> for &Header {
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(bincode::serialize(&self)?)
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 
     fn from_bytes(data: &[u8]) -> Result<Header, CoreError> {
-        Ok(bincode::deserialize(data)?)
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 }
 

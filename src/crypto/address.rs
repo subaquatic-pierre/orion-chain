@@ -1,14 +1,14 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
-use serde::{Deserialize, Serialize};
-
-use super::error::CryptoError;
+use super::{error::CryptoError, private_key::PrivateKey, public_key::PublicKey};
 use crate::core::{
     encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, BorshDeserialize, BorshSerialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Address {
     inner: [u8; 20],
 }
@@ -17,6 +17,12 @@ impl Deref for Address {
     type Target = [u8; 20];
 
     fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl AsRef<[u8]> for Address {
+    fn as_ref(&self) -> &[u8] {
         &self.inner
     }
 }
@@ -32,11 +38,18 @@ impl Address {
 }
 
 impl ByteEncoding<Address> for Address {
-    fn from_bytes(data: &[u8]) -> Result<Address, CoreError> {
-        Ok(bincode::deserialize(data)?)
-    }
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(bincode::serialize(&self)?)
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<Address, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 }
 
@@ -112,4 +125,11 @@ mod test {
             addr_4.to_hex().unwrap()
         );
     }
+}
+
+pub fn random_sender_receiver() -> (Address, Address) {
+    let pub1 = PrivateKey::new().pub_key();
+    let pub2 = PrivateKey::new().pub_key();
+
+    (pub1.address().unwrap(), pub2.address().unwrap())
 }

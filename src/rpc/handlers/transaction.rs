@@ -14,13 +14,14 @@ pub fn new_tx(rpc: &RPC, mem_pool: Arc<Mutex<TxPool>>) -> Result<Transaction, Ne
 
     match tx {
         Ok(mut tx) => {
+            // TODO: TX should be signed by client
             let key = PrivateKey::new();
-            tx.sign(&key)?;
+            let ver_data = tx.sign(&key)?;
             if let Ok(mut mem_pool) = mem_pool.lock() {
                 mem_pool.add(tx.clone());
                 debug!(
                     "adding transaction to the mem_pool in RpcController, hash: {}",
-                    tx.hash()
+                    ver_data.hash
                 );
                 Ok(tx)
             } else {

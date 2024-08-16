@@ -46,7 +46,7 @@ impl From<RpcHeader> for u16 {
 }
 
 #[derive(Debug, Clone)]
-pub enum RpcHandlerResponse {
+pub enum RpcResponse {
     Block(Block),
     Transaction(Transaction),
     Error(String),

@@ -7,29 +7,30 @@ use std::ops::Deref;
 
 use crate::core::encoding::{ByteEncoding, HexEncoding};
 use crate::core::error::CoreError;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::error::CryptoError;
 
-#[derive(Clone, Debug, Ord, Copy, PartialOrd)]
+#[derive(Clone, Debug, Ord, Copy, PartialOrd, BorshSerialize, BorshDeserialize)]
 pub struct Hash([u8; 32]);
 
-impl Serialize for Hash {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_hex().unwrap())
-    }
-}
+// impl Serialize for Hash {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         serializer.serialize_str(&self.to_hex().unwrap())
+//     }
+// }
 
-impl<'de> Deserialize<'de> for Hash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_str(HashVisitor)
-    }
-}
+// impl<'de> Deserialize<'de> for Hash {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         deserializer.deserialize_str(HashVisitor)
+//     }
+// }
 
 pub struct HashVisitor;
 

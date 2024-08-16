@@ -1,8 +1,12 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+use k256::sha2::Sha256;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::{Base64, Bcrypt, BinHex, Standard};
 use serde_with::serde_as;
 
+use crate::crypto::address::{random_sender_receiver, Address};
+use crate::crypto::utils::random_hash;
 use crate::crypto::{
     hash::Hash,
     private_key::PrivateKey,
@@ -17,50 +21,136 @@ use super::{
 };
 
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, BorshDeserialize, BorshSerialize)]
 pub struct Transaction {
-    #[serde_as(as = "Base64")]
+    pub tx_type: TransactionType,
     pub data: Vec<u8>,
-    pub hash: Hash,
+    pub receiver: Address,
+    pub sender: Address,
+    pub blockhash: Hash,
+    pub hash: Option<Hash>,
     pub signature: Option<SignatureBytes>,
     pub signer: Option<PublicKeyBytes>,
 }
 
+pub struct TxVerificationData {
+    pub signature: SignatureBytes,
+    pub signer: PublicKeyBytes,
+    pub hash: Hash,
+}
+
 impl Transaction {
-    pub fn new(data: &[u8]) -> Result<Self, CoreError> {
+    pub fn new(
+        tx_type: TransactionType,
+        blockhash: Hash,
+        receiver: Address,
+        sender: Address,
+        data: &[u8],
+    ) -> Result<Self, CoreError> {
         let data = data.to_vec();
-        let hash = Hash::sha256(&data)?;
+
         Ok(Self {
+            tx_type,
             data,
+            receiver,
+            sender,
+            blockhash,
             signature: None,
             signer: None,
-            hash,
+            hash: None,
         })
     }
 
-    pub fn hash(&self) -> Hash {
-        self.hash
+    pub fn new_transfer(
+        receiver: Address,
+        sender: Address,
+        blockhash: Hash,
+        data: &[u8],
+    ) -> Result<Self, CoreError> {
+        Ok(Self {
+            tx_type: TransactionType::Transfer,
+            receiver,
+            sender,
+            data: data.to_vec(),
+            blockhash,
+            signature: None,
+            signer: None,
+            hash: None,
+        })
+    }
+
+    pub fn hash(&self) -> Result<Hash, CoreError> {
+        match self.hash {
+            Some(d) => Ok(d),
+            None => Err(CoreError::Transaction("no hash on transaction".to_string())),
+        }
+    }
+
+    pub fn signature(&self) -> Result<SignatureBytes, CoreError> {
+        match &self.signature {
+            Some(d) => Ok(d.clone()),
+            None => Err(CoreError::Transaction(
+                "no signature on transaction".to_string(),
+            )),
+        }
+    }
+    pub fn signer(&self) -> Result<PublicKeyBytes, CoreError> {
+        match &self.signer {
+            Some(d) => Ok(d.clone()),
+            None => Err(CoreError::Transaction(
+                "no public key on transaction".to_string(),
+            )),
+        }
     }
 
     pub fn data_str(&self) -> String {
         String::from_utf8_lossy(&self.data).to_string()
     }
 
-    pub fn sign(&mut self, private_key: &PrivateKey) -> Result<(), CoreError> {
+    pub fn hashable_data(&self) -> Vec<u8> {
+        let mut buf = vec![];
+
+        // Include the transaction type
+        buf.extend_from_slice(&self.tx_type.to_bytes().unwrap());
+
+        // Include the sender's address
+        buf.extend_from_slice(&self.sender.to_bytes().unwrap());
+
+        // Include the receiver's address
+        buf.extend_from_slice(&self.receiver.to_bytes().unwrap());
+
+        // Include the transaction data
+        buf.extend_from_slice(&self.data);
+
+        // Include the block hash
+        buf.extend_from_slice(&self.blockhash.to_bytes().unwrap());
+        buf
+    }
+
+    pub fn sign(&mut self, private_key: &PrivateKey) -> Result<TxVerificationData, CoreError> {
         if self.signer.is_some() | self.signature.is_some() {
             return Err(CoreError::Transaction(
                 "transaction already is already signed".to_string(),
             ));
         }
 
-        let sig = private_key.sign(&self.data);
+        let hash_data = self.hashable_data();
+
+        let sig = private_key.sign(&hash_data);
         let sig_bytes = SignatureBytes::new(&sig.to_bytes()?)?;
         let pub_key_bytes = PublicKeyBytes::new(&private_key.pub_key().to_bytes()?)?;
 
-        self.signer = Some(pub_key_bytes);
-        self.signature = Some(sig_bytes);
+        let hash = Hash::sha256(&sig_bytes.to_bytes()?)?;
 
-        Ok(())
+        self.signer = Some(pub_key_bytes.clone());
+        self.signature = Some(sig_bytes.clone());
+        self.hash = Some(hash.clone());
+
+        Ok(TxVerificationData {
+            signature: sig_bytes,
+            signer: pub_key_bytes,
+            hash: hash,
+        })
     }
 
     pub fn verify(&self) -> Result<(), CoreError> {
@@ -70,12 +160,20 @@ impl Transaction {
             ));
         }
 
+        if self.hash.is_none() {
+            return Err(CoreError::Transaction(
+                "transaction has no hash".to_string(),
+            ));
+        }
+
         match (&self.signer, &self.signature) {
             (Some(key_bytes), Some(sig_bytes)) => {
                 let key = PublicKey::from_bytes(&key_bytes.to_bytes()?)?;
                 let signature = Signature::from_bytes(&sig_bytes.to_bytes()?)?;
 
-                if !key.verify(&self.data, &signature) {
+                let data = self.hashable_data();
+
+                if !key.verify(&data, &signature) {
                     return Err(CoreError::Transaction(
                         "invalid transaction signature".to_string(),
                     ));
@@ -92,12 +190,18 @@ impl Transaction {
 }
 
 impl ByteEncoding<Transaction> for Transaction {
-    fn from_bytes(data: &[u8]) -> Result<Transaction, CoreError> {
-        Ok(bincode::deserialize(data)?)
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(bincode::serialize(&self)?)
+    fn from_bytes(data: &[u8]) -> Result<Transaction, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 }
 
@@ -111,15 +215,90 @@ impl HexEncoding<Transaction> for Transaction {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, BorshDeserialize, BorshSerialize)]
+pub enum TransactionType {
+    Transfer,
+    SmartContract,
+}
+
+impl ByteEncoding<TransactionType> for TransactionType {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<TransactionType, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct TransferData {
+    pub to: Address,
+    pub from: Address,
+    pub gas_limit: u64,
+    pub amount: u64,
+}
+
+impl ByteEncoding<TransferData> for TransferData {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<TransferData, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct SmartContractData {
+    pub contract_address: Address,
+    pub gas_limit: u64,
+    pub method: String,
+    pub params: Vec<u8>,
+}
+
+impl ByteEncoding<SmartContractData> for SmartContractData {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<SmartContractData, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use crate::crypto::{address::random_sender_receiver, utils::random_hash};
+
     use super::*;
     #[test]
     fn test_transaction_sign() {
+        let r_hash = random_hash();
+
         let priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
+        let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new(data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
 
         assert!(matches!(tx.verify(), Err(_)));
 
@@ -132,8 +311,9 @@ mod test {
 
         let priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
+        let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new(data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
 
         // try double sign
         tx.sign(&priv_key).unwrap();
@@ -142,19 +322,23 @@ mod test {
 
     #[test]
     fn test_transaction_data_str() {
+        let r_hash = random_hash();
         let _priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
+        let (sender, receiver) = random_sender_receiver();
 
-        let tx = Transaction::new(data).unwrap();
+        let tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
         assert_eq!(tx.data_str(), "Hello world, Data is cool");
     }
 
     #[test]
     fn test_transaction_parse_bytes() {
+        let r_hash = random_hash();
         let priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
+        let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new(data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
 
         tx.sign(&priv_key).unwrap();
         let bytes = &tx.to_bytes().unwrap();
@@ -184,8 +368,10 @@ mod test {
     fn test_transaction_parse_hex() {
         let priv_key = PrivateKey::new();
         let data = b"Hello world, Data is cool";
+        let (sender, receiver) = random_sender_receiver();
+        let r_hash = random_hash();
 
-        let mut tx = Transaction::new(data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
         let _hex_str = tx.to_hex().unwrap();
 
         tx.sign(&priv_key).unwrap();
@@ -204,7 +390,7 @@ mod test {
 
         assert!(tx_2.verify().is_ok());
 
-        let tx_2_hash = tx_2.hash();
+        let tx_2_hash = tx_2.hash().unwrap();
         let tx_2_sig = tx_2.signature.unwrap();
 
         assert_eq!(tx_2_hash.len(), 32);
@@ -221,8 +407,10 @@ mod test {
 }
 
 pub fn random_tx() -> Transaction {
+    let r_hash = random_hash();
     let bytes = random_bytes(8);
-    Transaction::new(&bytes).unwrap()
+    let (sender, receiver) = random_sender_receiver();
+    Transaction::new_transfer(sender, receiver, r_hash, &bytes).unwrap()
 }
 
 pub fn random_signed_tx() -> Transaction {

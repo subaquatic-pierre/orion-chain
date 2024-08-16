@@ -12,7 +12,9 @@ use crate::api::server::ApiServerData;
 use crate::api::util::to_bytes;
 use crate::core::encoding::ByteEncoding;
 use crate::core::transaction::Transaction;
-use crate::rpc::types::{RpcHandlerResponse, RpcHeader, RPC};
+use crate::crypto::address::random_sender_receiver;
+use crate::crypto::utils::random_hash;
+use crate::rpc::types::{RpcHeader, RpcResponse, RPC};
 
 #[derive(Serialize, Deserialize)]
 pub struct GetTxReq {
@@ -40,11 +42,12 @@ pub async fn get_tx(
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Transaction(tx) => {
-            let data = json!({ "tx": tx });
+        RpcResponse::Transaction(tx) => {
+            let tx_json = tx.data_str();
+            let data = json!({ "tx": tx_json });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 
@@ -69,7 +72,10 @@ pub async fn new_tx(
         Err(e) => return Ok(e.respond_to(&req)),
     };
 
-    let new_tx = Transaction::new(&bytes)?;
+    // TODO: Tx should be completed and signed by client
+    let (sender, receiver) = random_sender_receiver();
+    let hash = random_hash();
+    let new_tx = Transaction::new_transfer(sender, receiver, hash, &bytes)?;
 
     debug!("NEW TX REQ :{new_tx:?}",);
 
@@ -81,11 +87,13 @@ pub async fn new_tx(
     let res = handler.handle_client_rpc(&rpc)?;
 
     let data = match res {
-        RpcHandlerResponse::Transaction(tx) => {
-            let data = json!({ "tx": tx });
+        RpcResponse::Transaction(tx) => {
+            let tx_json = tx.data_str();
+
+            let data = json!({ "tx": tx_json });
             json!({ "data": data })
         }
-        RpcHandlerResponse::Generic(string) => json!({ "error": string }),
+        RpcResponse::Generic(string) => json!({ "error": string }),
         _ => json!({"error":"incorrect response from RPC handler"}),
     };
 

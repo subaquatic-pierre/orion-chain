@@ -45,7 +45,10 @@ impl TxPool {
 
 #[cfg(test)]
 mod test {
-    use crate::core::transaction::random_tx;
+    use crate::{
+        core::transaction::random_tx,
+        crypto::{address::random_sender_receiver, utils::random_hash},
+    };
 
     use super::*;
     #[test]
@@ -61,8 +64,14 @@ mod test {
     #[test]
     fn test_flush() {
         let mut tx_pool = TxPool::new();
+        let r_hash = random_hash();
 
-        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i]).unwrap()).collect();
+        let txs: Vec<Transaction> = (0..20)
+            .map(|i| {
+                let (sender, receiver) = random_sender_receiver();
+                Transaction::new_transfer(sender, receiver, r_hash, &[i]).unwrap()
+            })
+            .collect();
 
         for tx in txs {
             tx_pool.add(tx);
@@ -78,8 +87,13 @@ mod test {
     #[test]
     fn test_take_txs() {
         let mut tx_pool = TxPool::new();
-
-        let txs: Vec<Transaction> = (0..20).map(|i| Transaction::new(&[i]).unwrap()).collect();
+        let r_hash = random_hash();
+        let (sender, receiver) = random_sender_receiver();
+        let txs: Vec<Transaction> = (0..20)
+            .map(|i| {
+                Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[i]).unwrap()
+            })
+            .collect();
 
         for tx in txs {
             tx_pool.add(tx);
@@ -89,12 +103,14 @@ mod test {
 
         assert_eq!(txs.len(), 3);
 
-        let tx = Transaction::new(&[1]).unwrap();
+        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1]).unwrap();
         assert_eq!(txs.contains(&tx), true);
-        let tx = Transaction::new(&[4]).unwrap();
+
+        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[4]).unwrap();
         assert_eq!(txs.contains(&tx), false);
 
-        let tx = Transaction::new(&[1]).unwrap();
+        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1]).unwrap();
+
         assert_eq!(tx_pool.len(), 17);
         assert_eq!(tx_pool.has(&tx), false);
     }

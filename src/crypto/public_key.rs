@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use ecdsa::{signature::Verifier, VerifyingKey};
 use k256::Secp256k1;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -91,7 +92,7 @@ impl From<PublicKeyBytes> for PublicKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, BorshDeserialize, BorshSerialize)]
 pub struct PublicKeyBytes([u8; 33]);
 
 impl PublicKeyBytes {

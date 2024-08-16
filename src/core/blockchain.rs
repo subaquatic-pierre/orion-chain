@@ -126,7 +126,6 @@ mod test {
         let genesis_header = random_header(0, genesis_hash);
         let genesis_block = random_block(genesis_header.clone());
 
-        println!("{:#?}", genesis_block);
         let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
 
         // check cannot re-add existing block

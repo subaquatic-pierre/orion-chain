@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use log::info;
 use serde::{Deserialize, Serialize};
 
@@ -119,7 +120,7 @@ impl BlockManager {
     // }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Block {
     pub header: Header,
     signer: Option<PublicKeyBytes>,
@@ -271,15 +272,15 @@ impl Block {
             0 => Hash::sha256(&[])?,
             1 => {
                 let mut buf: Vec<u8> = vec![];
-                let tx1_bytes = &txs[0].hash().to_bytes()?;
+                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
                 buf.extend_from_slice(&tx1_bytes);
                 buf.extend_from_slice(&tx1_bytes);
                 Hash::sha256(&buf).unwrap()
             }
             2 => {
                 let mut buf: Vec<u8> = vec![];
-                let tx1_bytes = &txs[0].hash().to_bytes()?;
-                let tx2_bytes = &txs[1].hash().to_bytes()?;
+                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
+                let tx2_bytes = &txs[1].hash()?.to_bytes()?;
 
                 buf.extend_from_slice(&tx1_bytes);
                 buf.extend_from_slice(&tx2_bytes);
@@ -293,12 +294,18 @@ impl Block {
 }
 
 impl ByteEncoding<Block> for Block {
-    fn from_bytes(data: &[u8]) -> Result<Block, CoreError> {
-        Ok(bincode::deserialize(data)?)
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        Ok(bincode::serialize(&self)?)
+    fn from_bytes(data: &[u8]) -> Result<Block, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
     }
 }
 
@@ -312,21 +319,21 @@ impl HexEncoding<Block> for Block {
     }
 }
 
-impl JsonEncoding<Block> for Block {
-    fn from_json(data: serde_json::Value) -> Result<Block, CoreError> {
-        match serde_json::from_value(data) {
-            Ok(d) => Ok(d),
-            Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
-        }
-    }
+// impl JsonEncoding<Block> for Block {
+//     fn from_json(data: serde_json::Value) -> Result<Block, CoreError> {
+//         match serde_json::from_value(data) {
+//             Ok(d) => Ok(d),
+//             Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
+//         }
+//     }
 
-    fn to_json(&self) -> Result<serde_json::Value, CoreError> {
-        match serde_json::to_value(&self) {
-            Ok(v) => Ok(v),
-            Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
-        }
-    }
-}
+//     fn to_json(&self) -> Result<serde_json::Value, CoreError> {
+//         match serde_json::to_value(&self) {
+//             Ok(v) => Ok(v),
+//             Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod test {
@@ -334,6 +341,7 @@ mod test {
 
     use serde_json::json;
 
+    use crate::crypto::address::random_sender_receiver;
     use crate::crypto::{
         hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
         utils::random_hash,
@@ -366,15 +374,19 @@ mod test {
 
     #[test]
     fn test_verify_block() {
+        let r_hash = random_hash();
         let header = random_header(0, random_hash());
         let private_key = PrivateKey::new();
 
         let mut block = Block::new(header, vec![]).unwrap();
 
-        let mut new_tx = Transaction::new(b"Cool World").unwrap();
+        let (sender, receiver) = random_sender_receiver();
+
+        let mut new_tx =
+            Transaction::new_transfer(sender, receiver, r_hash, b"Cool World").unwrap();
         new_tx.sign(&private_key).unwrap();
         block.add_transaction(new_tx).unwrap();
-        // block.transactions.push(Transaction::new(b"hello world"));
+        // block.transactions.push(Transaction::new_transfer(b"hello world"));
         assert!(block.sign(&private_key).is_ok());
 
         let private_key = PrivateKey::new();
@@ -383,9 +395,11 @@ mod test {
 
         assert!(block.verify().is_ok());
 
+        let (sender, receiver) = random_sender_receiver();
+
         block
             .transactions
-            .push(Transaction::new(b"hello world").unwrap());
+            .push(Transaction::new_transfer(sender, receiver, r_hash, b"hello world").unwrap());
 
         let msg = "transaction has no signature".to_string();
 
@@ -454,32 +468,32 @@ mod test {
         assert_eq!(headers.len(), blocks.len());
     }
 
-    #[test]
-    fn test_json_encoding() {
-        let json_block = json!({
-            "header": {
-                "difficulty": 1,
-                "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                "height": 274,
-                "nonce": 1,
-                "prev_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                "timestamp": 1723630872,
-                "version": 1
-            },
-            "signature": "b61fca1a77dd52e6648101988a06257ca229c1f92df337c08f0a5d1105520ab37066c3edb61d7429947acf2e5eb5dbe546998b105aac9666072a35d1309bfdbb",
-            "signer": "027a527f459ca204f5fac9f187590e9db5f3fdd59a4bca8a3f98441348de43b87a",
-            "transactions": []
-        });
+    // #[test]
+    // fn test_json_encoding() {
+    //     let json_block = json!({
+    //         "header": {
+    //             "difficulty": 1,
+    //             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    //             "height": 274,
+    //             "nonce": 1,
+    //             "prev_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    //             "timestamp": 1723630872,
+    //             "version": 1
+    //         },
+    //         "signature": "b61fca1a77dd52e6648101988a06257ca229c1f92df337c08f0a5d1105520ab37066c3edb61d7429947acf2e5eb5dbe546998b105aac9666072a35d1309bfdbb",
+    //         "signer": "027a527f459ca204f5fac9f187590e9db5f3fdd59a4bca8a3f98441348de43b87a",
+    //         "transactions": []
+    //     });
 
-        let block = Block::from_json(json_block).unwrap();
+    //     let block = Block::from_json(json_block).unwrap();
 
-        assert_eq!(block.header.timestamp, 1723630872);
-        let hash =
-            Hash::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-                .unwrap();
-        assert_eq!(block.header.timestamp, 1723630872);
-        assert_eq!(hash, *block.hash())
-    }
+    //     assert_eq!(block.header.timestamp, 1723630872);
+    //     let hash =
+    //         Hash::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    //             .unwrap();
+    //     assert_eq!(block.header.timestamp, 1723630872);
+    //     assert_eq!(hash, *block.hash())
+    // }
 }
 
 pub fn random_block(header: Header) -> Block {

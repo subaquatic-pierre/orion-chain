@@ -11,6 +11,7 @@ pub mod core;
 pub mod crypto;
 pub mod network;
 pub mod rpc;
+pub mod state;
 pub mod util;
 
 use std::{
@@ -27,7 +28,7 @@ use crate::network::{
 };
 use crate::rpc::{
     controller::RpcController,
-    types::{RpcHandlerResponse, RpcHeader, RPC},
+    types::{RpcHeader, RpcResponse, RPC},
 };
 
 use crate::core::encoding::ByteEncoding;
@@ -74,10 +75,10 @@ pub fn transaction_tester_thread(handler: Arc<Mutex<RpcController>>) {
         if let Ok(handler) = handler.lock() {
             if let Ok(res) = handler.handle_client_rpc(&rpc) {
                 match res {
-                    RpcHandlerResponse::Generic(msg) => {
+                    RpcResponse::Generic(msg) => {
                         warn!("incorrect generic response from RpcController: {msg}");
                     }
-                    RpcHandlerResponse::Transaction(tx) => {
+                    RpcResponse::Transaction(tx) => {
                         // info!("transaction successfully received from RpcController");
                     }
                     _ => {

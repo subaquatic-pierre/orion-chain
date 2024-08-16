@@ -58,6 +58,12 @@ impl From<io::ErrorKind> for CoreError {
     }
 }
 
+impl From<Box<dyn Error>> for CoreError {
+    fn from(value: Box<dyn Error>) -> Self {
+        CoreError::Parsing(format!("{value}"))
+    }
+}
+
 impl Responder for CoreError {
     type Body = BoxBody;
     fn respond_to(self, _req: &actix_web::HttpRequest) -> HttpResponse<Self::Body> {

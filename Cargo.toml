@@ -18,6 +18,7 @@ log = {version="0.4.20"}
 pretty_env_logger = "0.4"
 
 # Encoding
+borsh = { version = "1.5.1", features = ["derive"] }
 hex = "0.4.3"
 bytes = "1"
 serde = { version = "1.0", features = ["derive"] }
@@ -38,5 +39,9 @@ http = "0.2"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 actix-web = "4.9.0"
 actix-cors = "0.7.0"
+
+# Database
+rocksdb = "0.22.0"
+tempfile = "3.12.0"
 
 
