@@ -1,4 +1,9 @@
+use std::collections::HashMap;
+use std::error::Error;
+use std::fs::File;
+use std::io::Read;
 use std::io::Write;
+use std::path::PathBuf;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use log::info;
@@ -10,115 +15,15 @@ use crate::crypto::{
     hash::Hash, private_key::PrivateKey, public_key::PublicKey, signature::Signature,
 };
 
+use super::storage::DbBlockStorage;
 use super::{
-    encoding::{ByteEncoding, HexEncoding, JsonEncoding},
+    block_manager::BlockManager,
+    encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
     header::Header,
-    storage::{MemoryStorage, Storage},
+    storage::{BlockStorage, MemoryBlockStorage},
     transaction::Transaction,
 };
-
-#[derive(Clone, Debug)]
-struct HeaderPointer(*const Header);
-
-unsafe impl Send for HeaderPointer {}
-unsafe impl Sync for HeaderPointer {}
-#[derive(Clone, Debug)]
-struct BlockPointer(*const Block);
-
-unsafe impl Send for BlockPointer {}
-unsafe impl Sync for BlockPointer {}
-
-#[derive(Clone, Debug)]
-pub struct BlockManager {
-    blocks: Vec<Block>,
-    store: MemoryStorage,
-}
-
-impl BlockManager {
-    pub fn new() -> Self {
-        Self {
-            blocks: vec![],
-            store: MemoryStorage::new(),
-        }
-    }
-
-    pub fn headers(&self) -> Vec<&Header> {
-        let mut headers = vec![];
-        for block in &self.blocks {
-            headers.push(&block.header);
-        }
-        headers
-    }
-
-    pub fn blocks(&self) -> Vec<&Block> {
-        let mut blocks = vec![];
-        for block in &self.blocks {
-            blocks.push(block);
-        }
-        blocks
-    }
-
-    pub fn add(&mut self, block: Block) -> Result<(), CoreError> {
-        info!(
-            "adding block to chain with height: {}, and hash: {}",
-            &block.height(),
-            &block.hash().to_string()
-        );
-        match self.store.put(&block) {
-            Ok(_) => {
-                self.blocks.push(block);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn get_block(&self, index: usize) -> Option<&Block> {
-        self.blocks.get(index)
-    }
-
-    pub fn get_block_by_hash(&self, hash: &str) -> Option<&Block> {
-        // TODO: implement get block by hash
-        self.blocks.get(0)
-    }
-
-    pub fn get_header(&self, index: usize) -> Option<&Header> {
-        if let Some(b) = self.blocks.get(index) {
-            Some(&b.header)
-        } else {
-            None
-        }
-    }
-
-    pub fn last(&self) -> Option<&Block> {
-        self.blocks.last()
-    }
-
-    pub fn has_block(&self, height: usize) -> bool {
-        height <= self.height()
-    }
-
-    pub fn height(&self) -> usize {
-        self.blocks.len() - 1
-    }
-
-    // TODO: implement pointers to be used to get
-    // block by hash and get header by hash
-    // create new HashMaps on manager struct
-    // implement and to and remove from hashmap when adding
-    // or removing blocks
-
-    // pub fn pointers() {
-    // for ptr in &self.headers {
-    //     unsafe {
-    //         let header = &*(ptr.0 as *const Header);
-    //         headers.push(header);
-    //     };
-    // }
-    // headers
-    // }
-}
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Block {
@@ -203,11 +108,11 @@ impl Block {
     }
 
     pub fn prev_hash(&self) -> &Hash {
-        &self.header.prev_hash
+        &self.header.prev_blockhash
     }
 
     pub fn hash(&self) -> &Hash {
-        &self.header.hash
+        &self.header.blockhash
     }
 
     pub fn header_data(&self) -> Result<Vec<u8>, CoreError> {
@@ -253,12 +158,8 @@ impl Block {
     // ---
     // Static methods
     // ---
-    // TODO: implement merkle root
-    pub fn generate_block_hash(
-        block_height: usize,
-        txs: &[Transaction],
-    ) -> Result<Hash, CoreError> {
-        let merkle_hash: Hash = Block::generate_tx_merkle_hash(txs)?;
+    pub fn gen_blockhash(block_height: usize, txs: &[Transaction]) -> Result<Hash, CoreError> {
+        let merkle_hash: Hash = Block::gen_tx_root(txs)?;
         let mut buf = vec![];
 
         buf.extend_from_slice(&block_height.to_le_bytes().to_vec());
@@ -267,7 +168,7 @@ impl Block {
         Ok(Hash::sha256(&buf)?)
     }
 
-    pub fn generate_tx_merkle_hash(txs: &[Transaction]) -> Result<Hash, CoreError> {
+    pub fn gen_tx_root(txs: &[Transaction]) -> Result<Hash, CoreError> {
         let hash: Hash = match txs.len() {
             0 => Hash::sha256(&[])?,
             1 => {
@@ -286,7 +187,7 @@ impl Block {
                 buf.extend_from_slice(&tx2_bytes);
                 return Ok(Hash::sha256(&buf)?);
             }
-            _ => return Block::generate_tx_merkle_hash(&txs[..txs.len() - 2]),
+            _ => return Block::gen_tx_root(&txs[..txs.len() - 2]),
         };
 
         Ok(hash)
@@ -450,50 +351,6 @@ mod test {
         let decoded_block = Block::from_bytes(&block_bytes).unwrap();
         assert_eq!(format!("{:?}", block), format!("{:?}", decoded_block));
     }
-
-    #[test]
-    fn test_header_manager() {
-        let mut manager = BlockManager::new();
-
-        for _ in 0..5 {
-            let header = random_header(1, random_hash());
-            let block = random_block(header);
-
-            manager.add(block).unwrap();
-        }
-
-        let headers = manager.headers();
-        let blocks = manager.blocks();
-
-        assert_eq!(headers.len(), blocks.len());
-    }
-
-    // #[test]
-    // fn test_json_encoding() {
-    //     let json_block = json!({
-    //         "header": {
-    //             "difficulty": 1,
-    //             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    //             "height": 274,
-    //             "nonce": 1,
-    //             "prev_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    //             "timestamp": 1723630872,
-    //             "version": 1
-    //         },
-    //         "signature": "b61fca1a77dd52e6648101988a06257ca229c1f92df337c08f0a5d1105520ab37066c3edb61d7429947acf2e5eb5dbe546998b105aac9666072a35d1309bfdbb",
-    //         "signer": "027a527f459ca204f5fac9f187590e9db5f3fdd59a4bca8a3f98441348de43b87a",
-    //         "transactions": []
-    //     });
-
-    //     let block = Block::from_json(json_block).unwrap();
-
-    //     assert_eq!(block.header.timestamp, 1723630872);
-    //     let hash =
-    //         Hash::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-    //             .unwrap();
-    //     assert_eq!(block.header.timestamp, 1723630872);
-    //     assert_eq!(hash, *block.hash())
-    // }
 }
 
 pub fn random_block(header: Header) -> Block {

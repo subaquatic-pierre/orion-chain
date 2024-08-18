@@ -14,33 +14,32 @@ use crate::{
         block::{get_block, get_block_header, get_last_block},
         transaction::new_tx,
     },
+    vm::validator::Validator,
 };
 
-use crate::network::{
-    error::NetworkError, miner::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
-};
+use crate::network::{error::NetworkError, tcp::TcpController, tx_pool::TxPool, types::Payload};
 
 use crate::rpc::types::{RpcHeader, RpcResponse, RPC};
 
 pub struct RpcController {
     mem_pool: Arc<Mutex<TxPool>>,
-    _miner: Arc<Mutex<BlockMiner>>,
+    validator: Arc<Mutex<Validator>>,
     chain: Arc<Mutex<Blockchain>>,
-    _tcp_controller: Arc<Mutex<TcpController>>,
+    tcp_controller: Arc<Mutex<TcpController>>,
 }
 
 impl RpcController {
     pub fn new(
         mem_pool: Arc<Mutex<TxPool>>,
-        miner: Arc<Mutex<BlockMiner>>,
+        validator: Arc<Mutex<Validator>>,
         chain: Arc<Mutex<Blockchain>>,
         tcp_controller: Arc<Mutex<TcpController>>,
     ) -> Self {
         Self {
             mem_pool,
-            _miner: miner,
+            validator,
             chain: chain,
-            _tcp_controller: tcp_controller,
+            tcp_controller,
         }
     }
 

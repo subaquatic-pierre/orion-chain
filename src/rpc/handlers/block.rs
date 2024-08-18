@@ -29,12 +29,12 @@ pub fn get_block(rpc: &RPC, chain: Arc<Mutex<Blockchain>>) -> Result<Block, Netw
     }
 
     let block = if let Some(height) = &req.height {
-        let block_id = match height.parse::<usize>() {
+        let block_height = match height.parse::<usize>() {
             Ok(height) => height,
             Err(e) => return Err(NetworkError::Decoding(e.to_string())),
         };
 
-        chain.get_block(block_id)
+        chain.get_block_by_height(block_height)
     } else if let Some(hash) = &req.hash {
         chain.get_block_by_hash(&hash)
     } else {

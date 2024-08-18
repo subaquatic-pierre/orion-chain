@@ -13,27 +13,35 @@ use crate::crypto::{hash::Hash, utils::random_hash};
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Header {
     pub version: u8,
-    pub hash: Hash,
-    pub prev_hash: Hash,
+    pub blockhash: Hash,
+    pub prev_blockhash: Hash,
     pub height: usize,
     pub timestamp: u64,
-    // TODO: Handle nonce and difficulty correctly
-    pub difficulty: u8,
-    pub nonce: usize,
+    pub tx_root: Hash,
+    pub state_root: Hash,
+    pub poh: Hash,
 }
 
 impl Header {
-    pub fn new(height: usize, hash: Hash, prev_hash: Hash) -> Self {
+    pub fn new(
+        height: usize,
+        hash: Hash,
+        poh: Hash,
+        tx_root: Hash,
+        state_root: Hash,
+        prev_hash: Hash,
+    ) -> Self {
         let now = SystemTime::now();
         let timestamp = timestamp(now);
         Self {
             version: 1,
-            hash,
-            prev_hash,
+            blockhash: hash,
+            prev_blockhash: prev_hash,
             height,
             timestamp,
-            difficulty: 1,
-            nonce: 1,
+            poh,
+            tx_root,
+            state_root,
         }
     }
 
@@ -42,50 +50,11 @@ impl Header {
     }
 
     pub fn prev_hash(&self) -> Hash {
-        self.prev_hash.clone()
+        self.prev_blockhash.clone()
     }
 
     pub fn hash(&self) -> Hash {
-        self.hash.clone()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct HeaderManager {
-    headers: Vec<Header>,
-}
-
-impl HeaderManager {
-    pub fn new() -> Self {
-        Self { headers: vec![] }
-    }
-
-    pub fn add(&mut self, header: Header) {
-        self.headers.push(header)
-    }
-
-    pub fn get(&self, index: usize) -> Option<&Header> {
-        if let Some(h) = self.headers.get(index) {
-            Some(h)
-        } else {
-            None
-        }
-    }
-
-    pub fn last(&self) -> Option<&Header> {
-        if let Some(h) = self.headers.last() {
-            Some(h)
-        } else {
-            None
-        }
-    }
-
-    pub fn has_block(&self, height: usize) -> bool {
-        height <= self.height()
-    }
-
-    pub fn height(&self) -> usize {
-        self.headers.len() - 1
+        self.blockhash.clone()
     }
 }
 
@@ -154,8 +123,11 @@ mod test {
 
         let header_2 = header_2.unwrap();
 
-        assert_eq!(header.hash.to_string(), header_2.hash.to_string());
-        assert_eq!(header.prev_hash.to_string(), header_2.prev_hash.to_string());
+        assert_eq!(header.hash().to_string(), header_2.hash().to_string());
+        assert_eq!(
+            header.prev_hash().to_string(),
+            header_2.prev_hash().to_string()
+        );
         assert_eq!(header.version, header_2.version);
         assert_eq!(header.timestamp, header_2.timestamp);
         assert_eq!(header.height, header_2.height);
@@ -174,8 +146,11 @@ mod test {
 
         let header_2 = header_2.unwrap();
 
-        assert_eq!(header.hash.to_string(), header_2.hash.to_string());
-        assert_eq!(header.prev_hash.to_string(), header_2.prev_hash.to_string());
+        assert_eq!(header.hash().to_string(), header_2.hash().to_string());
+        assert_eq!(
+            header.prev_hash().to_string(),
+            header_2.prev_hash().to_string()
+        );
         assert_eq!(header.version, header_2.version);
         assert_eq!(header.timestamp, header_2.timestamp);
         assert_eq!(header.height, header_2.height);
@@ -187,14 +162,16 @@ pub fn random_header(height: usize, prev_hash: Hash) -> Header {
     let prev_hash = prev_hash;
     let timestamp = timestamp(SystemTime::now());
     let version = 1;
+    let random_hash = random_hash();
 
     Header {
         version,
-        hash,
-        prev_hash,
+        blockhash: hash,
+        prev_blockhash: prev_hash,
         height,
         timestamp,
-        difficulty: 1,
-        nonce: 1,
+        tx_root: random_hash,
+        state_root: random_hash,
+        poh: random_hash,
     }
 }

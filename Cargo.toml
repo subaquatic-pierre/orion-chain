@@ -43,5 +43,6 @@ actix-cors = "0.7.0"
 # Database
 rocksdb = "0.22.0"
 tempfile = "3.12.0"
+pem = "3.0.4"
 
 

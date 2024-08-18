@@ -1,8 +1,4 @@
-use super::{
-    block::{Block, BlockManager},
-    error::CoreError,
-    header::HeaderManager,
-};
+use super::{block::Block, block_manager::BlockManager, error::CoreError};
 
 pub struct BlockValidator {}
 

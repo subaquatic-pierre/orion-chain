@@ -3,36 +3,33 @@ use log::info;
 use crate::crypto::hash::Hash;
 
 use super::{
-    block::{Block, BlockManager},
+    block::{random_block, Block},
+    block_manager::BlockManager,
     error::CoreError,
-    header::{Header, HeaderManager},
-    storage::Storage,
+    header::{random_header, Header},
+    storage::BlockStorage,
     validator::BlockValidator,
 };
 
 pub struct Blockchain {
-    // header_manager: HeaderManager,
     block_manager: BlockManager,
     validator: BlockValidator,
 }
 
 impl Blockchain {
-    pub fn new(genesis_block: Block, validator: BlockValidator) -> Result<Self, CoreError> {
+    pub fn new(
+        storage_path: &str,
+        genesis_block: Block,
+        validator: BlockValidator,
+    ) -> Result<Self, CoreError> {
         let mut bc = Self {
-            // header_manager: HeaderManager::new(),
-            block_manager: BlockManager::new(),
+            block_manager: BlockManager::new(storage_path),
             validator,
         };
 
         bc.add_block_without_validation(genesis_block)?;
 
         Ok(bc)
-    }
-
-    pub fn new_with_genesis(genesis_block: Block) -> Self {
-        let mut bc = Self::default();
-        bc.add_block_without_validation(genesis_block).unwrap();
-        bc
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), CoreError> {
@@ -57,16 +54,17 @@ impl Blockchain {
         self.block_manager.last()
     }
 
-    pub fn get_block(&self, index: usize) -> Option<&Block> {
-        self.block_manager.get_block(index)
+    pub fn get_block_by_height(&self, index: usize) -> Option<Block> {
+        self.block_manager.get_block_by_height(index)
     }
 
-    pub fn get_block_by_hash(&self, hash: &str) -> Option<&Block> {
+    pub fn get_block_by_hash(&self, hash: &str) -> Option<Block> {
         self.block_manager.get_block_by_hash(hash)
     }
 
-    pub fn get_prev_block_hash(&self, block_number: usize) -> Option<Hash> {
-        self.get_block(block_number).map(|b| b.header.prev_hash)
+    pub fn get_prev_block_hash(&self, block_height: usize) -> Option<Hash> {
+        self.get_block_by_height(block_height)
+            .map(|b| b.header.prev_hash())
     }
 
     // ---
@@ -78,13 +76,41 @@ impl Blockchain {
 
         manager.add(block)
     }
+
+    // ---
+    // Used for testing and development
+    // ---
+
+    pub fn new_with_genesis() -> Result<Self, CoreError> {
+        let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
+        let block = random_block(random_header(0, genesis_hash));
+        let mut bc = Self::default();
+        bc.add_block_without_validation(block).unwrap();
+        Ok(bc)
+    }
+
+    pub fn new_with_genesis_in_memory() -> Result<Self, CoreError> {
+        let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
+        let block = random_block(random_header(0, genesis_hash));
+        let mut bc = Self::new_in_memory()?;
+        bc.add_block_without_validation(block).unwrap();
+        Ok(bc)
+    }
+
+    pub fn new_in_memory() -> Result<Self, CoreError> {
+        let bc: Blockchain = Self {
+            block_manager: BlockManager::new_in_memory(),
+            validator: BlockValidator::new(),
+        };
+
+        Ok(bc)
+    }
 }
 
 impl Default for Blockchain {
     fn default() -> Self {
         Self {
-            block_manager: BlockManager::new(),
-            // header_manager: HeaderManager::new(),
+            block_manager: BlockManager::default(),
             validator: BlockValidator::new(),
         }
     }
@@ -111,22 +137,16 @@ mod test {
 
     #[test]
     fn test_new_blockchain() {
-        let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
-        let header = random_header(0, genesis_hash);
-        let genesis_block = random_block(header);
-        let validator = BlockValidator::new();
-        let bc = Blockchain::new(genesis_block, validator);
+        let bc = Blockchain::new_with_genesis_in_memory();
 
         assert!(bc.is_ok())
     }
 
     #[test]
     fn test_add_block() {
-        let genesis_hash = Hash::new(&[0_u8; 32]).unwrap();
-        let genesis_header = random_header(0, genesis_hash);
-        let genesis_block = random_block(genesis_header.clone());
-
-        let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
+        let mut bc = Blockchain::new_with_genesis_in_memory().unwrap();
+        let genesis_block = bc.get_block_by_height(0).unwrap();
+        let genesis_header = genesis_block.header().clone();
 
         // check cannot re-add existing block
         let err_msg = match bc.add_block(genesis_block.clone()) {
@@ -162,18 +182,15 @@ mod test {
 
     #[test]
     fn test_has_block() {
-        let header = random_header(0, Hash::new(&[0_u8; 32]).unwrap());
-        let genesis_block = random_block(header);
-        let bc = Blockchain::new_with_genesis(genesis_block);
+        let bc = Blockchain::new_with_genesis_in_memory().unwrap();
 
         assert!(bc.has_block(0));
     }
 
     #[test]
     fn get_header() {
-        let header = random_header(0, random_hash());
-        let genesis_block = random_block(header);
-        let mut bc = Blockchain::new_with_genesis(genesis_block.clone());
+        let mut bc = Blockchain::new_with_genesis_in_memory().unwrap();
+        let genesis_block = bc.get_block_by_height(0).unwrap();
 
         let mut headers: Vec<Header> = vec![];
         let mut prev_header: Header = random_header(1, genesis_block.hash().clone());
@@ -200,8 +217,14 @@ mod test {
             }
         }
 
-        let last_block = blocks.last().unwrap();
+        let last_block = bc.last_block().unwrap();
 
-        // assert!(bc.get_header(last_block.height() as usize).is_some());
+        let block = bc
+            .get_block_by_height(last_block.height() as usize)
+            .unwrap();
+
+        // let last_block = blocks.last().unwrap();
+
+        assert_eq!(last_block.hash(), block.hash());
     }
 }

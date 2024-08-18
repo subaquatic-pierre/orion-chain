@@ -1,15 +1,17 @@
+use crate::core::{
+    encoding::{ByteEncoding, HexEncoding},
+    error::CoreError,
+};
 use ecdsa::{
     elliptic_curve::rand_core::OsRng, signature::Signer, Signature as ECDASignature, SigningKey,
     VerifyingKey,
 };
 use k256::Secp256k1;
+use pem::{encode, parse, Pem};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-
-use crate::core::{
-    encoding::{ByteEncoding, HexEncoding},
-    error::CoreError,
-};
+use std::io::Write;
+use std::{fmt::Display, fs::File};
+use std::{io::Read, path::Path};
 
 use super::{error::CryptoError, public_key::PublicKey, signature::Signature};
 
@@ -34,6 +36,38 @@ impl PrivateKey {
         let sig: ECDASignature<Secp256k1> = self.key.sign(msg);
 
         Signature::new(sig)
+    }
+
+    pub fn from_pem(path: &Path) -> Result<Self, CoreError> {
+        let mut file = File::open(path).map_err(|e| CoreError::Parsing(e.to_string()))?;
+        let mut pem_data = Vec::new();
+        file.read_to_end(&mut pem_data)
+            .map_err(|e| CoreError::Parsing(e.to_string()))?;
+
+        let pem = parse(&pem_data).map_err(|e| CoreError::Parsing(e.to_string()))?;
+
+        let private_key_bytes = pem.contents();
+        let private_key = PrivateKey::from_bytes(private_key_bytes)?;
+
+        Ok(private_key)
+    }
+
+    pub fn write_pem(&self, path: &Path) -> Result<(), CoreError> {
+        let bytes = self.to_bytes()?;
+
+        // Create PEM encoding
+        let pem = Pem::new(path.to_string_lossy(), bytes);
+        // Write PEM to file
+        match File::create(path) {
+            Ok(mut file) => {
+                let encode = encode(&pem);
+                if let Err(e) = file.write_all(encode.as_bytes()) {
+                    return Err(CoreError::Serialize(e.to_string()));
+                }
+                Ok(())
+            }
+            Err(e) => Err(CoreError::Serialize(e.to_string())),
+        }
     }
 }
 
@@ -74,6 +108,10 @@ impl Display for PrivateKey {
 
 #[cfg(test)]
 mod test {
+    use std::fs;
+
+    use crate::crypto::public_key;
+
     use super::*;
 
     #[test]
@@ -112,5 +150,27 @@ mod test {
 
         assert_eq!(is_valid, true);
         assert_eq!(not_valid, false);
+    }
+
+    #[test]
+    fn test_pem() {
+        let file_path = Path::new("private_key.pem");
+        let pvt_key = PrivateKey::new();
+
+        let data = [1, 2, 3, 4];
+
+        let sign = pvt_key.sign(&data);
+
+        pvt_key.write_pem(file_path).unwrap();
+
+        let from_file = PrivateKey::from_pem(file_path).unwrap();
+
+        let pub_key = from_file.pub_key();
+
+        let val = pub_key.verify(&data, &sign);
+
+        fs::remove_file(file_path).unwrap();
+
+        assert_eq!(val, true);
     }
 }

@@ -13,9 +13,11 @@ pub mod network;
 pub mod rpc;
 pub mod state;
 pub mod util;
+pub mod vm;
 
 use std::{
     net::SocketAddr,
+    path::Path,
     sync::{mpsc::Sender, Arc, Mutex, Once},
     thread, time,
 };
@@ -37,15 +39,9 @@ pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;
 
 pub fn build_full_node() -> Result<ChainNode> {
-    let config = NodeConfig {
-        block_time: time::Duration::from_secs(5),
-        private_key: Some(PrivateKey::new()),
-    };
+    let config = NodeConfig::default();
 
-    let block = random_block(random_header(0, random_hash()));
-    let chain = Blockchain::new_with_genesis(block);
-
-    Ok(ChainNode::new(config, chain))
+    Ok(ChainNode::new(config))
 }
 
 static INIT: Once = Once::new();

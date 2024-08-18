@@ -1,6 +1,7 @@
 use core::time;
 use std::{
     net::SocketAddr,
+    path::{Path, PathBuf},
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
@@ -12,11 +13,15 @@ use std::{
 
 use log::{error, info, warn};
 
-use crate::{core::error::CoreError, lock};
+use crate::{
+    core::{block::random_block, error::CoreError},
+    crypto::hash::Hash,
+    lock,
+};
 
 use crate::rpc::{
     controller::RpcController,
-    types::{RpcResponse, RpcHeader, RPC},
+    types::{RpcHeader, RpcResponse, RPC},
 };
 
 use crate::{
@@ -27,12 +32,12 @@ use crate::{
         transaction::Transaction,
     },
     crypto::{private_key::PrivateKey, utils::random_hash},
+    vm::validator::Validator,
     GenericError,
 };
 
 use super::{
     error::NetworkError,
-    miner::BlockMiner,
     tx_pool::TxPool,
     types::{Payload, RpcChanMsg},
 };
@@ -40,22 +45,40 @@ use super::{tcp::TcpController, types::ArcMut};
 
 pub struct NodeConfig {
     pub block_time: time::Duration,
-    pub private_key: Option<PrivateKey>,
+    pub private_key: PrivateKey,
+    pub state_storage_path: PathBuf,
+    pub chain_storage_path: PathBuf,
+}
+
+impl Default for NodeConfig {
+    fn default() -> Self {
+        NodeConfig {
+            block_time: time::Duration::from_secs(5),
+            private_key: PrivateKey::from_pem(Path::new("data/private_key.pem")).unwrap(),
+            state_storage_path: Path::new("data/state.db").to_owned(),
+            chain_storage_path: Path::new("data/chain.db").to_owned(),
+        }
+    }
 }
 
 pub struct ChainNode {
+    config: NodeConfig,
     tcp_controller: ArcMut<TcpController>,
     rpc_rx: ArcMut<Receiver<RpcChanMsg>>,
     rpc_tx: ArcMut<Sender<RpcChanMsg>>,
-    block_time: time::Duration,
     mem_pool: ArcMut<TxPool>,
-    miner: ArcMut<BlockMiner>,
+    validator: ArcMut<Validator>,
     pub chain: ArcMut<Blockchain>,
     rpc_controller: Arc<RpcController>,
 }
 
 impl ChainNode {
-    pub fn new(config: NodeConfig, chain: Blockchain) -> Self {
+    pub fn new(config: NodeConfig) -> Self {
+        // TODO: start chain from config
+        let chain = Blockchain::new_with_genesis().unwrap();
+
+        // TODO: clear storage if config requires fresh state eg. during dev
+
         // TODO: create helper function to build ArcMut chanel
         let (tx, rx) = channel::<RpcChanMsg>();
         let (rpc_tx, rpc_rx) = (ArcMut::new(tx), ArcMut::new(rx));
@@ -68,26 +91,25 @@ impl ChainNode {
 
         // TODO: get private key from config
         // TODO: get pool size from config
-        let pk = PrivateKey::new();
-        let miner = ArcMut::new(BlockMiner::new(pk, 50));
+        let validator = ArcMut::new(Validator::new(config.private_key.clone(), 50));
 
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
 
         let rpc_controller = RpcController::new(
             mem_pool.clone(),
-            miner.clone(),
+            validator.clone(),
             chain.clone(),
             tcp_controller.clone(),
         );
         let rpc_controller = Arc::new(rpc_controller);
 
         Self {
+            config,
             rpc_rx,
             rpc_tx,
-            block_time: config.block_time,
             mem_pool,
-            miner,
+            validator,
             chain,
             tcp_controller,
             rpc_controller,
@@ -122,9 +144,9 @@ impl ChainNode {
         // messages from peers
         self.spawn_peer_rpc_thread();
 
-        // Spawn miner thread if ChainNode is miner
-        // TODO: Check if is full node in config, if not full node then miner is not needed
-        self.spawn_miner_thread();
+        // Spawn validator thread if ChainNode is validator
+        // TODO: Check if is full node in config, if not full node then validator is not needed
+        self.spawn_validator_thread();
 
         Ok(())
     }
@@ -158,46 +180,49 @@ impl ChainNode {
         });
     }
 
-    // TODO: change miner to VM
-    fn spawn_miner_thread(&self) {
-        let block_time = self.block_time;
-        let miner = self.miner.clone();
+    // TODO: change validator to VM
+    fn spawn_validator_thread(&self) {
+        let block_time = self.config.block_time;
+        let validator = self.validator.clone();
         let mem_pool = self.mem_pool.clone();
         let chain = self.chain.clone();
 
-        // TODO: check if ChainNode has block miner
+        // TODO: check if ChainNode has block validator
         // spawn mining thread if exists
         thread::spawn(move || {
             loop {
                 thread::sleep(block_time);
-                // check is server has miner
-                // miner takes transactions from mem pool on each block duration
-                let mut miner = lock!(miner);
+                // TODO: check is validator is current leader
+
+                // TODO: check is node is full validator node or just slim node
+
+                let mut validator = lock!(validator);
                 if let Ok(mut pool) = mem_pool.lock() {
-                    let pool_size = miner.pool_size;
-                    let txs = pool.take(pool_size);
+                    // validator takes transactions from mem pool on each block duration
+                    let txs = pool.take(validator.pool_size);
 
                     if let Ok(mut chain) = chain.lock() {
                         if let Some(last_block) = chain.last_block() {
-                            // get block from miner
-                            if let Ok(block) = miner.mine_block(last_block.header(), txs) {
-                                // add block to blockchain
+                            if let Ok(block) = validator.validate_block(last_block.header(), txs) {
+                                // TODO: propose block to network
+                                // broadcast added block
+                                // once block is confirmed by majority voting
+                                // adding block to chain is handled by RPC Controller
                                 if let Err(e) = chain.add_block(block) {
-                                    warn!("unable to add block in Node::spawn_miner_thread: {e}");
+                                    warn!(
+                                        "unable to add block in Node::spawn_validator_thread: {e}"
+                                    );
                                 }
                             }
                         } else {
-                            warn!("unable to get last block chain in Node::spawn_miner_thread");
+                            warn!("unable to get last block chain in Node::spawn_validator_thread");
                         }
                     } else {
-                        warn!("unable to lock chain in Node::spawn_miner_thread");
+                        warn!("unable to lock chain in Node::spawn_validator_thread");
                     }
 
-                    // broadcast added block
-
                     // update last block time
-                    miner.last_block_time = Instant::now();
-                    // }
+                    validator.last_block_time = Instant::now();
                 }
             }
         });

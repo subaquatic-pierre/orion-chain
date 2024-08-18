@@ -16,9 +16,7 @@ use crate::{
     lock,
 };
 
-use crate::network::{
-    error::NetworkError, miner::BlockMiner, tcp::TcpController, tx_pool::TxPool, types::Payload,
-};
+use crate::network::types::Payload;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[repr(u16)]

@@ -14,7 +14,7 @@ impl StateStorage {
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
 
-        StateStorage { db }
+        Self { db }
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
