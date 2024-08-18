@@ -73,6 +73,7 @@ impl BlockManager {
     }
 
     pub fn get_block_by_height(&self, index: usize) -> Option<Block> {
+        // TODO: handle mapping in more efficiently
         let mapping = self
             .load_height_to_hash_mapping(&self.height_to_hash_filepath.to_string_lossy())
             .unwrap();

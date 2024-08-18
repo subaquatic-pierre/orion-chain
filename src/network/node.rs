@@ -1,5 +1,7 @@
 use core::time;
 use std::{
+    error::Error,
+    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{
@@ -11,7 +13,7 @@ use std::{
     vec,
 };
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     core::{block::random_block, error::CoreError},
@@ -48,6 +50,8 @@ pub struct NodeConfig {
     pub private_key: PrivateKey,
     pub state_storage_path: PathBuf,
     pub chain_storage_path: PathBuf,
+    pub dev: bool,
+    pub mem_pool_size: usize,
 }
 
 impl Default for NodeConfig {
@@ -57,6 +61,8 @@ impl Default for NodeConfig {
             private_key: PrivateKey::from_pem(Path::new("data/private_key.pem")).unwrap(),
             state_storage_path: Path::new("data/state.db").to_owned(),
             chain_storage_path: Path::new("data/chain.db").to_owned(),
+            dev: true,
+            mem_pool_size: 50,
         }
     }
 }
@@ -75,9 +81,11 @@ pub struct ChainNode {
 impl ChainNode {
     pub fn new(config: NodeConfig) -> Self {
         // TODO: start chain from config
-        let chain = Blockchain::new_with_genesis().unwrap();
+        if config.dev {
+            clear_all_data().unwrap()
+        }
 
-        // TODO: clear storage if config requires fresh state eg. during dev
+        let chain = Blockchain::new_with_genesis().unwrap();
 
         // TODO: create helper function to build ArcMut chanel
         let (tx, rx) = channel::<RpcChanMsg>();
@@ -89,9 +97,10 @@ impl ChainNode {
 
         let tcp_controller = ArcMut::new(tcp_controller);
 
-        // TODO: get private key from config
-        // TODO: get pool size from config
-        let validator = ArcMut::new(Validator::new(config.private_key.clone(), 50));
+        let validator = ArcMut::new(Validator::new(
+            config.private_key.clone(),
+            config.mem_pool_size,
+        ));
 
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
@@ -227,4 +236,33 @@ impl ChainNode {
             }
         });
     }
+}
+
+fn clear_all_data() -> Result<(), Box<dyn Error>> {
+    let block_data_dir = PathBuf::from("data/chain.db");
+    let state_data_dir = PathBuf::from("data/state.db");
+    let mapping_file = PathBuf::from("data/height_to_hash.json");
+
+    if block_data_dir.exists() && block_data_dir.is_dir() {
+        fs::remove_dir_all(block_data_dir)?;
+        debug!("Block Data and its contents removed successfully.");
+    } else {
+        debug!("Block Data directory does not exist.");
+    }
+
+    if state_data_dir.exists() && state_data_dir.is_dir() {
+        fs::remove_dir_all(state_data_dir)?;
+        debug!("State Data and its contents removed successfully.");
+    } else {
+        debug!("State Data directory does not exist.");
+    }
+
+    if mapping_file.exists() {
+        fs::remove_file(mapping_file)?;
+        debug!("Height to Hash mapping removed successfully.");
+    } else {
+        debug!("Height to Hash mapping does not exist.");
+    }
+
+    Ok(())
 }
