@@ -30,7 +30,17 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 // pub static POST_DATA: &str = r#"{"original": "data"}"#;
 // pub static URL: &str = "http://127.0.0.1:1337/json_api";
 
-pub struct ApiServerConfig {}
+pub struct ApiServerConfig {
+    api_addr: String,
+}
+
+impl Default for ApiServerConfig {
+    fn default() -> Self {
+        ApiServerConfig {
+            api_addr: "0.0.0.0:6000".to_string(),
+        }
+    }
+}
 
 pub struct ApiServerData {
     pub config: ApiServerConfig,
@@ -39,20 +49,22 @@ pub struct ApiServerData {
 
 pub struct ApiServer {
     // router: Arc<Mutex<HttpRouter>>,
+    config: ApiServerConfig,
     data: Data<ApiServerData>,
 }
 
 impl ApiServer {
-    pub fn new(rpc_controller: Arc<RpcController>) -> Self {
+    pub fn new(config: ApiServerConfig, rpc_controller: Arc<RpcController>) -> Self {
         let data = Data::new(ApiServerData {
-            config: ApiServerConfig {},
+            config: ApiServerConfig::default(),
             rpc_controller,
         });
 
-        Self { data }
+        Self { data, config }
     }
 
     pub async fn start(&self) -> Result<Server> {
+        let api_addr = self.config.api_addr.to_string();
         let data = self.data.clone();
         let server = HttpServer::new(move || {
             let cors = Cors::default()
@@ -71,7 +83,7 @@ impl ApiServer {
                 .wrap(Logger::default())
                 .wrap(cors)
         })
-        .bind("0.0.0.0:8080")?
+        .bind(api_addr.to_string())?
         .run();
         Ok(server)
     }

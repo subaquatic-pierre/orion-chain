@@ -52,6 +52,7 @@ pub struct NodeConfig {
     pub chain_storage_path: PathBuf,
     pub dev: bool,
     pub mem_pool_size: usize,
+    pub peer_addr: String,
 }
 
 impl Default for NodeConfig {
@@ -63,6 +64,7 @@ impl Default for NodeConfig {
             chain_storage_path: Path::new("data/chain.db").to_owned(),
             dev: true,
             mem_pool_size: 50,
+            peer_addr: "0.0.0.0:5000".to_string(),
         }
     }
 }
@@ -87,12 +89,11 @@ impl ChainNode {
 
         let chain = Blockchain::new_with_genesis().unwrap();
 
-        // TODO: create helper function to build ArcMut chanel
         let (tx, rx) = channel::<RpcChanMsg>();
         let (rpc_tx, rpc_rx) = (ArcMut::new(tx), ArcMut::new(rx));
 
         // TODO: CONFIG, get listener address from config
-        let addr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+        let addr: SocketAddr = config.peer_addr.parse().unwrap();
         let tcp_controller = TcpController::new(addr, rpc_tx.clone()).unwrap();
 
         let tcp_controller = ArcMut::new(tcp_controller);
