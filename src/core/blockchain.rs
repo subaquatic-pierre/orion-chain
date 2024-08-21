@@ -50,7 +50,7 @@ impl Blockchain {
         height <= self.height() as usize
     }
 
-    pub fn last_block(&self) -> Option<&Block> {
+    pub fn last_block(&self) -> Option<Block> {
         self.block_manager.last()
     }
 
@@ -188,7 +188,7 @@ mod test {
     }
 
     #[test]
-    fn get_header() {
+    fn test_get_header() {
         let mut bc = Blockchain::new_with_genesis_in_memory().unwrap();
         let genesis_block = bc.get_block_by_height(0).unwrap();
 

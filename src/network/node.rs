@@ -219,16 +219,18 @@ impl ChainNode {
                                 // once block is confirmed by majority voting
                                 // adding block to chain is handled by RPC Controller
                                 if let Err(e) = chain.add_block(block) {
-                                    warn!(
-                                        "unable to add block in Node::spawn_validator_thread: {e}"
+                                    error!(
+                                        "unable to add block in ChainNode::spawn_validator_thread: {e}"
                                     );
                                 }
                             }
                         } else {
-                            warn!("unable to get last block chain in Node::spawn_validator_thread");
+                            error!(
+                                "unable to get last block chain in ChainNode::spawn_validator_thread"
+                            );
                         }
                     } else {
-                        warn!("unable to lock chain in Node::spawn_validator_thread");
+                        error!("unable to lock chain in ChainNode::spawn_validator_thread");
                     }
 
                     // update last block time

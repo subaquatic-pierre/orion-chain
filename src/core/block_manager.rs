@@ -6,7 +6,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use log::info;
+use log::{error, info, warn};
+use rocksdb::IteratorMode;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::public_key::PublicKeyBytes;
@@ -28,7 +29,6 @@ use super::{
 pub struct BlockManager {
     blocks: Vec<Block>,
     store: Box<dyn BlockStorage>,
-    height_to_hash_filepath: PathBuf,
 }
 
 impl BlockManager {
@@ -36,7 +36,6 @@ impl BlockManager {
         Self {
             blocks: vec![],
             store: DbBlockStorage::new_boxed(storage_path),
-            height_to_hash_filepath: PathBuf::from("data/height_to_hash.json"),
         }
     }
 
@@ -62,30 +61,24 @@ impl BlockManager {
             &block.height(),
             &block.hash().to_string()
         );
-        match self.store.put(&block) {
-            Ok(_) => {
-                self.update_height_to_hash_mapping(&block)?;
-                self.blocks.push(block);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+        self.store.put(&block)
     }
 
-    pub fn get_block_by_height(&self, index: usize) -> Option<Block> {
-        // TODO: handle mapping in more efficiently
-        let mapping = self
-            .load_height_to_hash_mapping(&self.height_to_hash_filepath.to_string_lossy())
-            .unwrap();
-
-        let hash = match mapping.get(&index) {
+    pub fn get_block_by_height(&self, height: usize) -> Option<Block> {
+        let hash = match self.store.height_to_hash(height) {
             Some(hash) => hash,
-            None => return None,
+            None => {
+                warn!("unable to get block hash from height:{height}");
+                return None;
+            }
         };
 
-        match self.store.get(hash) {
+        match self.store.get(&hash) {
             Ok(b) => Some(b),
-            Err(_) => None,
+            Err(_) => {
+                warn!("unable to get block by hash: {hash}");
+                None
+            }
         }
     }
 
@@ -96,16 +89,27 @@ impl BlockManager {
         }
     }
 
-    pub fn get_header(&self, index: usize) -> Option<&Header> {
-        if let Some(b) = self.blocks.get(index) {
-            Some(&b.header)
-        } else {
-            None
+    pub fn get_header_by_height(&self, height: usize) -> Option<Header> {
+        match self.get_block_by_height(height) {
+            Some(block) => Some(block.header().clone()),
+            None => None,
+        }
+    }
+    pub fn get_header_by_hash(&self, hash: &str) -> Option<Header> {
+        match self.get_block_by_hash(hash) {
+            Some(block) => Some(block.header().clone()),
+            None => None,
         }
     }
 
-    pub fn last(&self) -> Option<&Block> {
-        self.blocks.last()
+    pub fn last(&self) -> Option<Block> {
+        match self.store.last_block_height() {
+            Some(height) => self.get_block_by_height(height),
+            None => {
+                error!("store.last_block_height is None");
+                None
+            }
+        }
     }
 
     pub fn has_block(&self, height: usize) -> bool {
@@ -113,69 +117,20 @@ impl BlockManager {
     }
 
     pub fn height(&self) -> usize {
-        self.blocks.len() - 1
+        match self.store.last_block_height() {
+            Some(height) => height,
+            None => 0,
+        }
     }
 
     // ---
     // Private Methods
     // ---
-    fn update_height_to_hash_mapping(&self, block: &Block) -> Result<(), Box<dyn Error>> {
-        let mapping =
-            self.load_height_to_hash_mapping(&self.height_to_hash_filepath.to_string_lossy())?;
-
-        self.write_height_to_hash_mapping(block, mapping)?;
-
-        Ok(())
-    }
-
-    fn load_height_to_hash_mapping(
-        &self,
-        file_path: &str,
-    ) -> Result<HashMap<usize, String>, Box<dyn Error>> {
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true) // Create the file if it doesn't exist
-            .open(file_path)?;
-
-        let mut json_str = String::new();
-
-        file.read_to_string(&mut json_str)?;
-        if json_str.is_empty() {
-            // File is newly created, initialize with empty JSON object
-            json_str = "{}".to_string()
-        }
-
-        Ok(serde_json::from_str(&json_str)?)
-    }
-
-    fn write_height_to_hash_mapping(
-        &self,
-        block: &Block,
-        mut mapping: HashMap<usize, String>,
-    ) -> Result<(), Box<dyn Error>> {
-        // Update the height_to_hash mapping
-        mapping.insert(block.height(), block.hash().to_hex()?);
-
-        // Serialize the updated HashMap to JSON
-        let json_str = serde_json::to_string_pretty(&mapping)?;
-
-        // Write the JSON back to the file
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true) // Create the file if it doesn't exist
-            .open(&self.height_to_hash_filepath)?;
-
-        file.write_all(json_str.as_bytes())?;
-        Ok(())
-    }
 
     pub fn new_in_memory() -> Self {
         Self {
             blocks: vec![],
             store: MemoryBlockStorage::new_boxed(),
-            height_to_hash_filepath: PathBuf::from("data/height_to_hash.json"),
         }
     }
 }
@@ -198,7 +153,7 @@ mod test {
 
     #[test]
     fn test_header_manager() {
-        let mut manager = BlockManager::default();
+        let mut manager = BlockManager::new_in_memory();
 
         for _ in 0..5 {
             let header = random_header(1, random_hash());
