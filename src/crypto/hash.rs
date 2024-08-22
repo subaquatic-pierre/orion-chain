@@ -1,8 +1,9 @@
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
+use sha256::Sha256Digest;
 use std::fmt;
 use std::fmt::Display;
-use std::hash::{Hash as StdHash, Hasher};
+use std::hash::{Hash as StdHash, Hasher as StdHasher};
 use std::ops::Deref;
 
 use crate::core::encoding::{ByteEncoding, HexEncoding};
@@ -13,43 +14,6 @@ use super::error::CryptoError;
 
 #[derive(Clone, Debug, Ord, Copy, PartialOrd, BorshSerialize, BorshDeserialize)]
 pub struct Hash([u8; 32]);
-
-// impl Serialize for Hash {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         serializer.serialize_str(&self.to_hex().unwrap())
-//     }
-// }
-
-// impl<'de> Deserialize<'de> for Hash {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         deserializer.deserialize_str(HashVisitor)
-//     }
-// }
-
-pub struct HashVisitor;
-
-impl<'de> Visitor<'de> for HashVisitor {
-    type Value = Hash;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("&str")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match Hash::from_hex(v) {
-            Ok(hash) => Ok(hash),
-            Err(e) => Err(E::custom(format!("{e}"))),
-        }
-    }
-}
 
 impl Hash {
     pub fn new(bytes: &[u8; 32]) -> Result<Self, CryptoError> {
@@ -96,6 +60,42 @@ impl Hash {
     }
 }
 
+pub struct Hasher {
+    data: Vec<u8>,
+}
+
+impl Hasher {
+    pub fn new() -> Self {
+        Self { data: vec![] }
+    }
+
+    pub fn update(&mut self, data: &Vec<u8>) -> Result<(), CryptoError> {
+        let mut buf = vec![];
+        buf.extend_from_slice(&self.data);
+        buf.extend_from_slice(data);
+        let bytes = hex::decode(sha256::digest(data));
+
+        if bytes.is_err() {
+            return Err(CryptoError::HashError(
+                "unable to hex decode sha256 digest".to_string(),
+            ));
+        }
+
+        let bytes = bytes.unwrap();
+
+        self.data = bytes;
+        Ok(())
+    }
+
+    pub fn finalize(&self) -> Result<Hash, CryptoError> {
+        let mut buf: [u8; 32] = [0_u8; 32];
+        for (i, b) in self.data.iter().enumerate() {
+            buf[i] = b.clone()
+        }
+        Hash::new(&buf)
+    }
+}
+
 impl ByteEncoding<Hash> for Hash {
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
         Ok(self.0.to_vec())
@@ -135,7 +135,7 @@ impl PartialEq for Hash {
 impl Eq for Hash {}
 
 impl StdHash for Hash {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+    fn hash<H: StdHasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }

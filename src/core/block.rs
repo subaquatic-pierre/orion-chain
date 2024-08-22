@@ -115,10 +115,6 @@ impl Block {
         &self.header.blockhash
     }
 
-    pub fn header_data(&self) -> Result<Vec<u8>, CoreError> {
-        self.header.to_bytes()
-    }
-
     pub fn height(&self) -> usize {
         self.header.height as usize
     }
@@ -150,47 +146,9 @@ impl Block {
     // get data to be hashed for the block
     fn hashable_data(&self) -> Result<Vec<u8>, CoreError> {
         let mut data = vec![];
-        data.extend_from_slice(&self.header_data()?);
+        data.extend_from_slice(&&self.header.hashable_data());
         data.extend_from_slice(&self.txs_bytes()?);
         Ok(data)
-    }
-
-    // ---
-    // Static methods
-    // ---
-    pub fn gen_blockhash(block_height: usize, txs: &[Transaction]) -> Result<Hash, CoreError> {
-        let merkle_hash: Hash = Block::gen_tx_root(txs)?;
-        let mut buf = vec![];
-
-        buf.extend_from_slice(&block_height.to_le_bytes().to_vec());
-        buf.extend_from_slice(&merkle_hash.to_bytes()?);
-
-        Ok(Hash::sha256(&buf)?)
-    }
-
-    pub fn gen_tx_root(txs: &[Transaction]) -> Result<Hash, CoreError> {
-        let hash: Hash = match txs.len() {
-            0 => Hash::sha256(&[])?,
-            1 => {
-                let mut buf: Vec<u8> = vec![];
-                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
-                buf.extend_from_slice(&tx1_bytes);
-                buf.extend_from_slice(&tx1_bytes);
-                Hash::sha256(&buf).unwrap()
-            }
-            2 => {
-                let mut buf: Vec<u8> = vec![];
-                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
-                let tx2_bytes = &txs[1].hash()?.to_bytes()?;
-
-                buf.extend_from_slice(&tx1_bytes);
-                buf.extend_from_slice(&tx2_bytes);
-                return Ok(Hash::sha256(&buf)?);
-            }
-            _ => return Block::gen_tx_root(&txs[..txs.len() - 2]),
-        };
-
-        Ok(hash)
     }
 }
 
@@ -219,22 +177,6 @@ impl HexEncoding<Block> for Block {
         Ok(hex::encode(&self.to_bytes()?))
     }
 }
-
-// impl JsonEncoding<Block> for Block {
-//     fn from_json(data: serde_json::Value) -> Result<Block, CoreError> {
-//         match serde_json::from_value(data) {
-//             Ok(d) => Ok(d),
-//             Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
-//         }
-//     }
-
-//     fn to_json(&self) -> Result<serde_json::Value, CoreError> {
-//         match serde_json::to_value(&self) {
-//             Ok(v) => Ok(v),
-//             Err(e) => Err(CoreError::Parsing("unable to parse Block".to_string())),
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod test {

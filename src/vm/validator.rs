@@ -38,10 +38,16 @@ impl Validator {
         txs: Vec<Transaction>,
     ) -> Result<Block, CoreError> {
         let height = last_header.height() + 1;
-        let prev_hash = last_header.hash().clone();
-        let hash = Block::gen_blockhash(height, &txs).unwrap();
+        let prev_blockhash = last_header.hash().clone();
+        let poh = Header::gen_poh(&txs)?;
+        let tx_root = Header::gen_tx_root(&txs)?;
 
-        let header = random_header(height, prev_hash);
+        // TODO: get actual state root
+        let state_root = Header::gen_state_root()?;
+
+        let blockhash = Header::gen_blockhash(height, prev_blockhash, poh, tx_root, state_root)?;
+
+        let header = Header::new(height, blockhash, poh, tx_root, state_root, prev_blockhash);
         let mut block = Block::new(header, txs)?;
         info!(
             "create new block in MINER {:}, num txs: {}, with height: {}",

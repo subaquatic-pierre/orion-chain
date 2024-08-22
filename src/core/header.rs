@@ -1,4 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -6,9 +7,13 @@ use super::{
     block::Block,
     encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
+    transaction::Transaction,
     util::timestamp,
 };
-use crate::crypto::{hash::Hash, utils::random_hash};
+use crate::crypto::{
+    hash::{Hash, Hasher},
+    utils::random_hash,
+};
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct Header {
@@ -25,20 +30,21 @@ pub struct Header {
 impl Header {
     pub fn new(
         height: usize,
-        hash: Hash,
+        blockhash: Hash,
         poh: Hash,
         tx_root: Hash,
         state_root: Hash,
-        prev_hash: Hash,
+        prev_blockhash: Hash,
     ) -> Self {
         let now = SystemTime::now();
         let timestamp = timestamp(now);
         Self {
             version: 1,
-            blockhash: hash,
-            prev_blockhash: prev_hash,
-            height,
+            blockhash,
             timestamp,
+            // Below fields are used to determine blockhash
+            height,
+            prev_blockhash,
             poh,
             tx_root,
             state_root,
@@ -55,6 +61,69 @@ impl Header {
 
     pub fn hash(&self) -> Hash {
         self.blockhash.clone()
+    }
+
+    pub fn hashable_data(&self) -> Vec<u8> {
+        vec![]
+    }
+
+    // Static Hashing Methods
+    pub fn gen_blockhash(
+        block_height: usize,
+        prev_blockhash: Hash,
+        poh: Hash,
+        tx_root: Hash,
+        state_root: Hash,
+    ) -> Result<Hash, CoreError> {
+        let mut buf = vec![];
+
+        buf.extend_from_slice(&block_height.to_le_bytes().to_vec());
+        buf.extend_from_slice(&prev_blockhash.to_bytes()?);
+        buf.extend_from_slice(&poh.to_bytes()?);
+        buf.extend_from_slice(&tx_root.to_bytes()?);
+        buf.extend_from_slice(&state_root.to_bytes()?);
+
+        Ok(Hash::sha256(&buf)?)
+    }
+
+    pub fn gen_tx_root(txs: &[Transaction]) -> Result<Hash, CoreError> {
+        let hash: Hash = match txs.len() {
+            0 => Hash::sha256(&[])?,
+            1 => {
+                let mut buf: Vec<u8> = vec![];
+                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
+                buf.extend_from_slice(&tx1_bytes);
+                buf.extend_from_slice(&tx1_bytes);
+                Hash::sha256(&buf).unwrap()
+            }
+            2 => {
+                let mut buf: Vec<u8> = vec![];
+                let tx1_bytes = &txs[0].hash()?.to_bytes()?;
+                let tx2_bytes = &txs[1].hash()?.to_bytes()?;
+
+                buf.extend_from_slice(&tx1_bytes);
+                buf.extend_from_slice(&tx2_bytes);
+                return Ok(Hash::sha256(&buf)?);
+            }
+            _ => return Self::gen_tx_root(&txs[..txs.len() - 2]),
+        };
+
+        Ok(hash)
+    }
+
+    pub fn gen_poh(txs: &[Transaction]) -> Result<Hash, CoreError> {
+        let mut hasher = Hasher::new();
+
+        for tx in txs {
+            hasher.update(&tx.to_bytes()?)?;
+        }
+
+        Ok(hasher.finalize()?)
+    }
+
+    pub fn gen_state_root() -> Result<Hash, CoreError> {
+        debug!("NEED TO IMPLEMENT Header::gen_state_root!!!");
+        Ok(random_hash())
     }
 }
 
@@ -105,8 +174,9 @@ impl HexEncoding<Header> for Header {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::crypto::{
-        hash::Hash, public_key::PublicKey, signature::Signature, utils::random_hash,
+    use crate::{
+        core::transaction::random_signed_tx,
+        crypto::{hash::Hash, public_key::PublicKey, signature::Signature, utils::random_hash},
     };
 
     #[test]
@@ -133,6 +203,7 @@ mod test {
         assert_eq!(header.height, header_2.height);
     }
 
+    #[test]
     fn test_header_parse_hex() {
         let header = random_header(0, random_hash());
 
@@ -154,6 +225,110 @@ mod test {
         assert_eq!(header.version, header_2.version);
         assert_eq!(header.timestamp, header_2.timestamp);
         assert_eq!(header.height, header_2.height);
+    }
+
+    #[test]
+    fn test_gen_tx_root_empty() {
+        let txs: Vec<Transaction> = vec![];
+        let result = Header::gen_tx_root(&txs);
+        assert!(result.is_ok());
+
+        let expected_hash = Hash::sha256(&[]).unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
+    }
+
+    #[test]
+    fn test_gen_tx_root_single() {
+        let tx1 = random_signed_tx();
+        let txs = vec![tx1.clone()];
+        let result = Header::gen_tx_root(&txs);
+
+        if let Err(e) = &result {
+            println!("{e}");
+        }
+
+        assert!(result.is_ok());
+
+        let mut buf = vec![];
+        let tx1_bytes = tx1.hash().unwrap().to_bytes().unwrap();
+        buf.extend_from_slice(&tx1_bytes);
+        buf.extend_from_slice(&tx1_bytes);
+
+        let expected_hash = Hash::sha256(&buf).unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
+    }
+
+    #[test]
+    fn test_gen_tx_root_two() {
+        let tx1 = random_signed_tx();
+        let tx2 = random_signed_tx();
+        let txs = vec![tx1.clone(), tx2.clone()];
+        let result = Header::gen_tx_root(&txs);
+        assert!(result.is_ok());
+
+        let mut buf = vec![];
+        let tx1_bytes = tx1.hash().unwrap().to_bytes().unwrap();
+        let tx2_bytes = tx2.hash().unwrap().to_bytes().unwrap();
+
+        buf.extend_from_slice(&tx1_bytes);
+        buf.extend_from_slice(&tx2_bytes);
+
+        let expected_hash = Hash::sha256(&buf).unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
+    }
+
+    #[test]
+    fn test_gen_tx_root_multiple() {
+        let tx1 = random_signed_tx();
+        let tx2 = random_signed_tx();
+        let tx3 = random_signed_tx();
+        let txs = vec![tx1.clone(), tx2.clone(), tx3.clone()];
+        let result = Header::gen_tx_root(&txs);
+        assert!(result.is_ok());
+
+        // Since gen_tx_root returns the root hash of tx1 and tx2, we can validate against that.
+        let expected_root = Header::gen_tx_root(&txs[..txs.len() - 2]).unwrap();
+        assert_eq!(result.unwrap(), expected_root);
+    }
+
+    #[test]
+    fn test_gen_poh_empty() {
+        let txs: Vec<Transaction> = vec![];
+        let result = Header::gen_poh(&txs);
+        assert!(result.is_ok());
+
+        let expected_hash = Hasher::new().finalize().unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
+    }
+
+    #[test]
+    fn test_gen_poh_single() {
+        let tx1 = random_signed_tx();
+        let txs = vec![tx1.clone()];
+        let result = Header::gen_poh(&txs);
+        assert!(result.is_ok());
+
+        let mut hasher = Hasher::new();
+        hasher.update(&tx1.to_bytes().unwrap()).unwrap();
+        let expected_hash = hasher.finalize().unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
+    }
+
+    #[test]
+    fn test_gen_poh_multiple() {
+        let tx1 = random_signed_tx();
+        let tx2 = random_signed_tx();
+        let tx3 = random_signed_tx();
+        let txs = vec![tx1.clone(), tx2.clone(), tx3.clone()];
+        let result = Header::gen_poh(&txs);
+        assert!(result.is_ok());
+
+        let mut hasher = Hasher::new();
+        for tx in &txs {
+            hasher.update(&tx.to_bytes().unwrap()).unwrap();
+        }
+        let expected_hash = hasher.finalize().unwrap();
+        assert_eq!(result.unwrap(), expected_hash);
     }
 }
 
