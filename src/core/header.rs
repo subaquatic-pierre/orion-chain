@@ -10,7 +10,7 @@ use super::{
 };
 use crate::crypto::{hash::Hash, utils::random_hash};
 
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct Header {
     pub version: u8,
     pub blockhash: Hash,

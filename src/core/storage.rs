@@ -205,5 +205,166 @@ impl BlockStorage for DbBlockStorage {
     }
 }
 
-// aa951ce3b56f48e77e81d6caad03438ddaaaff880d5ad15abfbee2b5a6560ee5
-// aa951ce3b56f48e77e81d6caad03438ddaaaff880d5ad15abfbee2b5a6560ee5
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::block::random_block;
+    use crate::core::header::random_header;
+    use crate::core::{block::Block, header::Header}; // Adjust the import path based on your project structure
+    use crate::crypto::utils::random_hash; // Adjust the import path based on your project structure
+    use tempdir::TempDir; //
+
+    #[test]
+    fn test_in_mem_put_block() {
+        let mut storage = MemoryBlockStorage::new();
+
+        let random_header = random_header(1, random_hash());
+        let block = random_block(random_header);
+        assert!(storage.put(&block).is_ok());
+
+        assert_eq!(storage.last_block_height(), Some(1));
+        assert_eq!(
+            storage.height_to_hash(1),
+            Some(block.hash().to_hex().unwrap())
+        );
+        assert_eq!(storage.get(&block.hash().to_hex().unwrap()).unwrap(), block);
+    }
+
+    #[test]
+    fn test_in_mem_get_block() {
+        let mut storage = MemoryBlockStorage::new();
+
+        let random_header = random_header(0, random_hash());
+        let block = random_block(random_header);
+        storage.put(&block).unwrap();
+
+        let retrieved_block = storage.get(&block.hash().to_hex().unwrap()).unwrap();
+        assert_eq!(retrieved_block, block);
+
+        let non_existent_block = storage.get("non_existent_hash");
+        assert!(non_existent_block.is_err());
+    }
+
+    #[test]
+    fn test_in_mem_height_to_hash() {
+        let mut storage = MemoryBlockStorage::new();
+
+        let random_header_1 = random_header(1, random_hash());
+        let random_header_2 = random_header(2, random_hash());
+        let block1 = random_block(random_header_1);
+        let block2 = random_block(random_header_2);
+
+        storage.put(&block1).unwrap();
+        storage.put(&block2).unwrap();
+
+        assert_eq!(
+            storage.height_to_hash(1),
+            Some(block1.hash().to_hex().unwrap())
+        );
+        assert_eq!(
+            storage.height_to_hash(2),
+            Some(block2.hash().to_hex().unwrap())
+        );
+        assert_eq!(storage.height_to_hash(3), None);
+    }
+
+    #[test]
+    fn test_in_mem_last_block_height() {
+        let mut storage = MemoryBlockStorage::new();
+
+        assert_eq!(storage.last_block_height(), Some(0)); // Initially no blocks, so height should
+
+        let random_header_1 = random_header(1, random_hash());
+        let random_header_2 = random_header(2, random_hash());
+        let block1 = random_block(random_header_1);
+        let block2 = random_block(random_header_2);
+
+        storage.put(&block1).unwrap();
+        assert_eq!(storage.last_block_height(), Some(1));
+
+        storage.put(&block2).unwrap();
+        assert_eq!(storage.last_block_height(), Some(2));
+    }
+
+    // DB Storage Tests
+
+    #[test]
+    fn test_db_put_block() {
+        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let db_path = temp_dir.path().to_str().unwrap();
+        let mut storage = DbBlockStorage::new(db_path);
+
+        let random_header = random_header(1, random_hash());
+        let block = random_block(random_header);
+        assert!(storage.put(&block).is_ok());
+
+        assert_eq!(storage.last_block_height(), Some(1));
+        assert_eq!(
+            storage.height_to_hash(1),
+            Some(block.hash().to_hex().unwrap())
+        );
+        assert_eq!(storage.get(&block.hash().to_hex().unwrap()).unwrap(), block);
+    }
+
+    #[test]
+    fn test_db_get_block() {
+        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let db_path = temp_dir.path().to_str().unwrap();
+        let mut storage = DbBlockStorage::new(db_path);
+
+        let random_header = random_header(0, random_hash());
+        let block = random_block(random_header);
+        storage.put(&block).unwrap();
+
+        let retrieved_block = storage.get(&block.hash().to_hex().unwrap()).unwrap();
+        assert_eq!(retrieved_block, block);
+
+        let non_existent_block = storage.get("non_existent_hash");
+        assert!(non_existent_block.is_err());
+    }
+
+    #[test]
+    fn test_db_height_to_hash() {
+        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let db_path = temp_dir.path().to_str().unwrap();
+        let mut storage = DbBlockStorage::new(db_path);
+
+        let random_header_1 = random_header(1, random_hash());
+        let random_header_2 = random_header(2, random_hash());
+        let block1 = random_block(random_header_1);
+        let block2 = random_block(random_header_2);
+
+        storage.put(&block1).unwrap();
+        storage.put(&block2).unwrap();
+
+        assert_eq!(
+            storage.height_to_hash(1),
+            Some(block1.hash().to_hex().unwrap())
+        );
+        assert_eq!(
+            storage.height_to_hash(2),
+            Some(block2.hash().to_hex().unwrap())
+        );
+        assert_eq!(storage.height_to_hash(3), None);
+    }
+
+    #[test]
+    fn test_db_last_block_height() {
+        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let db_path = temp_dir.path().to_str().unwrap();
+        let mut storage = DbBlockStorage::new(db_path);
+
+        assert_eq!(storage.last_block_height(), None); // Initially no blocks, so height should
+
+        let random_header_1 = random_header(1, random_hash());
+        let random_header_2 = random_header(2, random_hash());
+        let block1 = random_block(random_header_1);
+        let block2 = random_block(random_header_2);
+
+        storage.put(&block1).unwrap();
+        assert_eq!(storage.last_block_height(), Some(1));
+
+        storage.put(&block2).unwrap();
+        assert_eq!(storage.last_block_height(), Some(2));
+    }
+}

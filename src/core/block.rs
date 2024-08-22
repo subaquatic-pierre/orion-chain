@@ -25,7 +25,7 @@ use super::{
     transaction::Transaction,
 };
 
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct Block {
     pub header: Header,
     signer: Option<PublicKeyBytes>,
