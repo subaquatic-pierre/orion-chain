@@ -142,7 +142,7 @@ impl Default for BlockManager {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::core::block::random_block;
     use crate::crypto::utils::random_hash;

@@ -148,7 +148,7 @@ impl Display for Signature {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::crypto::private_key::PrivateKey;
 

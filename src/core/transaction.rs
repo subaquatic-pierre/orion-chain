@@ -286,7 +286,7 @@ impl ByteEncoding<SmartContractData> for SmartContractData {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::crypto::{address::random_sender_receiver, utils::random_hash};
 
     use super::*;

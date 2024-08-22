@@ -1,40 +1,101 @@
-use rocksdb::{Options, DB};
+use log::{error, warn};
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
+use crate::core::encoding::HexEncoding;
+use crate::core::error::CoreError;
 use crate::{core::encoding::ByteEncoding, crypto::address::Address};
 
 use crate::state::account::Account;
 
 pub struct StateStorage {
     db: DB,
+    account_cf: String,
 }
 
 impl StateStorage {
     pub fn new(path: &str) -> Self {
+        let account_cf = "account_cf".to_string();
+
         let mut options = Options::default();
         options.create_if_missing(true);
-        let db = DB::open(&options, path).unwrap();
+        options.create_missing_column_families(true);
 
-        Self { db }
+        let account_cf_descriptor = ColumnFamilyDescriptor::new(&account_cf, Options::default());
+
+        let db = DB::open_cf_descriptors(&options, path, vec![account_cf_descriptor])
+            .expect("Unable to open DB with column families");
+
+        Self { db, account_cf }
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
-        match self.db.get(address) {
-            Ok(Some(value)) => match Account::from_bytes(&value) {
-                Ok(acc) => Some(acc),
-                Err(e) => None,
+        let addr_str = match address.to_hex() {
+            Ok(str) => str,
+            Err(e) => {
+                error!("unable to convert address to hex in StateStorage.get_account, {e}");
+                return None;
+            }
+        };
+
+        let account = match self.db.cf_handle(&self.account_cf) {
+            Some(handle) => match self.db.get_cf(handle, &addr_str) {
+                Ok(Some(value)) => {
+                    match Account::from_bytes(&value) {
+                        Ok(acc) => Some(acc),
+                        Err(e) => {
+                            error!("unable to convert account from bytes in StateStorage.get_account, {e}");
+                            None
+                        }
+                    }
+                }
+                Ok(None) => {
+                    warn!("no account found for address: {addr_str} in StateStorage.get_account");
+                    None
+                }
+                Err(e) => {
+                    error!("unable to get account data from ColumnFamily in StateStorage.get_account, {e}");
+                    None
+                }
             },
-            Ok(None) => None,
-            Err(_) => None,
+            None => {
+                warn!("unable to get account ColumnFamily in StateStorage");
+                None
+            }
+        };
+        account
+    }
+
+    pub fn set_account(&self, address: &Address, account: &Account) -> Result<(), CoreError> {
+        let addr_str = address.to_hex()?;
+        match self.db.cf_handle(&self.account_cf) {
+            Some(handle) => {
+                self.db
+                    .put_cf(handle, &addr_str, account.to_bytes()?)
+                    .map_err(|e| {
+                        CoreError::State(format!(
+                            "unable to put address: {} in StateStorage, {e}",
+                            addr_str
+                        ))
+                    })?;
+                Ok(())
+            }
+            None => Err(CoreError::State(
+                "unable to get ColumnFamily handle in StateStorage.set_account".to_string(),
+            )),
         }
     }
 
-    pub fn set_account(&self, address: &Address, account: &Account) {
-        let serialized = account.to_bytes().unwrap();
-        self.db.put(address, serialized).unwrap();
-    }
+    pub fn delete_account(&self, address: &Address) -> Result<(), CoreError> {
+        let addr_str = address.to_hex()?;
 
-    pub fn delete_account(&self, address: &Address) {
-        self.db.delete(address).unwrap();
+        match self.db.cf_handle(&self.account_cf) {
+            Some(handle) => {
+                self.db.delete_cf(handle, addr_str).unwrap();
+            }
+            None => error!("unable to get ColumnFamily handle in StateStorage.delete_account"),
+        }
+
+        Ok(())
     }
 }
 
@@ -60,7 +121,7 @@ mod tests {
         };
 
         // Store the account
-        storage.set_account(&address, &account);
+        storage.set_account(&address, &account).unwrap();
 
         // Retrieve the account and check if it matches
         let retrieved_account = storage.get_account(&address);
@@ -100,10 +161,10 @@ mod tests {
         };
 
         // Store the account
-        storage.set_account(&address, &account);
+        storage.set_account(&address, &account).unwrap();
 
         // Delete the account
-        storage.delete_account(&address);
+        storage.delete_account(&address).unwrap();
 
         // Ensure the account is no longer in the storage
         let retrieved_account = storage.get_account(&address);

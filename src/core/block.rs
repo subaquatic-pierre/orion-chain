@@ -179,7 +179,7 @@ impl HexEncoding<Block> for Block {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::io::{BufWriter, Read, Write};
 
     use serde_json::json;

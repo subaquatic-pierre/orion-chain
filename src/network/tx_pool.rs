@@ -44,7 +44,7 @@ impl TxPool {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{
         core::transaction::random_tx,
         crypto::{address::random_sender_receiver, utils::random_hash},

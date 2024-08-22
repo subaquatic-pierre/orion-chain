@@ -149,7 +149,7 @@ impl Deref for Hash {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::crypto::utils::{random_bytes, random_hash};
 

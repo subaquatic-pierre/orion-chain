@@ -172,7 +172,7 @@ impl HexEncoding<Header> for Header {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{
         core::transaction::random_signed_tx,

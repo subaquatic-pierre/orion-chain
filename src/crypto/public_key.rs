@@ -175,7 +175,7 @@ impl Deref for PublicKeyBytes {
     }
 }
 
-mod test {
+mod tests {
 
     #[test]
     fn test_public_key() {

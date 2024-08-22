@@ -98,7 +98,7 @@ impl PeerMessage {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
     #[test]

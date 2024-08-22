@@ -8,23 +8,16 @@ use super::{
     error::CoreError,
     header::{random_header, Header},
     storage::BlockStorage,
-    validator::BlockValidator,
 };
 
 pub struct Blockchain {
     block_manager: BlockManager,
-    validator: BlockValidator,
 }
 
 impl Blockchain {
-    pub fn new(
-        storage_path: &str,
-        genesis_block: Block,
-        validator: BlockValidator,
-    ) -> Result<Self, CoreError> {
+    pub fn new(storage_path: &str, genesis_block: Block) -> Result<Self, CoreError> {
         let mut bc = Self {
             block_manager: BlockManager::new(storage_path),
-            validator,
         };
 
         bc.add_block_without_validation(genesis_block)?;
@@ -33,12 +26,12 @@ impl Blockchain {
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), CoreError> {
-        let manager = &mut self.block_manager;
-
-        match self.validator.validate_block(manager, &block) {
-            Ok(_) => manager.add(block),
-            Err(e) => Err(e),
+        if self.has_block(block.height()) {
+            return Err(CoreError::Block(
+                "blockchain already contains block".to_string(),
+            ));
         }
+        self.block_manager.add(block)
     }
 
     pub fn height(&self) -> usize {
@@ -100,7 +93,6 @@ impl Blockchain {
     pub fn new_in_memory() -> Result<Self, CoreError> {
         let bc: Blockchain = Self {
             block_manager: BlockManager::new_in_memory(),
-            validator: BlockValidator::new(),
         };
 
         Ok(bc)
@@ -111,13 +103,12 @@ impl Default for Blockchain {
     fn default() -> Self {
         Self {
             block_manager: BlockManager::default(),
-            validator: BlockValidator::new(),
         }
     }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use log::{error, info};
     fn init() {
         env_logger::init();
@@ -127,7 +118,6 @@ mod test {
         core::{
             block::{random_block, random_signed_block},
             header::random_header,
-            validator,
         },
         crypto::{hash::Hash, utils::random_hash},
         logger_init,

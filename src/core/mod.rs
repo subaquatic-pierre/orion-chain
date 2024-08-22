@@ -7,4 +7,3 @@ pub mod header;
 pub mod storage;
 pub mod transaction;
 pub mod util;
-pub mod validator;

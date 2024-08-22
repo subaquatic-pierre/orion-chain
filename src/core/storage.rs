@@ -68,6 +68,7 @@ impl DbBlockStorage {
     pub fn new(path: &str) -> Self {
         let block_cf = "block_cf".to_string();
         let height_to_hash_cf = "height_to_hash_cf".to_string();
+
         let mut options = Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
@@ -103,22 +104,13 @@ impl BlockStorage for DbBlockStorage {
     fn put(&mut self, block: &Block) -> Result<(), CoreError> {
         let mut batch = WriteBatch::default();
 
-        let block_cf = match self.get_cf_handle(&self.block_cf) {
-            Some(cf) => cf,
-            None => {
-                return Err(CoreError::Block(
-                    "unable to get block column family from db".to_string(),
-                ))
-            }
-        };
-        let height_cf = match self.get_cf_handle(&self.height_to_hash_cf) {
-            Some(cf) => cf,
-            None => {
-                return Err(CoreError::Block(
-                    "unable to get height column family from db".to_string(),
-                ))
-            }
-        };
+        let block_cf = self.get_cf_handle(&self.block_cf).ok_or_else(|| {
+            CoreError::Block("unable to get block column family from db".to_string())
+        })?;
+
+        let height_cf = self.get_cf_handle(&self.height_to_hash_cf).ok_or_else(|| {
+            CoreError::Block("unable to get height column family from db".to_string())
+        })?;
 
         // Store block by hash in block_cf
         batch.put_cf(block_cf, block.hash().to_hex()?, block.to_bytes()?);
@@ -137,14 +129,10 @@ impl BlockStorage for DbBlockStorage {
     }
 
     fn get(&self, hash: &str) -> Result<Block, CoreError> {
-        let block_cf = match self.get_cf_handle(&self.block_cf) {
-            Some(cf) => cf,
-            None => {
-                return Err(CoreError::Block(
-                    "unable to get block column family from db".to_string(),
-                ))
-            }
-        };
+        let block_cf = self.get_cf_handle(&self.block_cf).ok_or_else(|| {
+            CoreError::Block("unable to get block column family from db".to_string())
+        })?;
+
         match self.db.get_cf(block_cf, hash) {
             Ok(res) => match res {
                 Some(bytes) => Ok(Block::from_bytes(&bytes)?),
@@ -159,7 +147,10 @@ impl BlockStorage for DbBlockStorage {
     fn height_to_hash(&self, height: usize) -> Option<String> {
         let height_to_hash_cf = match self.get_cf_handle(&self.height_to_hash_cf) {
             Some(cf) => cf,
-            None => return None,
+            None => {
+                error!("unable to get ColumnFamily handle in height_to_hash");
+                return None;
+            }
         };
 
         match self.db.get_cf(height_to_hash_cf, height.to_string()) {
@@ -212,7 +203,7 @@ mod tests {
     use crate::core::header::random_header;
     use crate::core::{block::Block, header::Header}; // Adjust the import path based on your project structure
     use crate::crypto::utils::random_hash; // Adjust the import path based on your project structure
-    use tempdir::TempDir; //
+    use tempfile::tempdir;
 
     #[test]
     fn test_in_mem_put_block() {
@@ -290,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_db_put_block() {
-        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().to_str().unwrap();
         let mut storage = DbBlockStorage::new(db_path);
 
@@ -308,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_db_get_block() {
-        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().to_str().unwrap();
         let mut storage = DbBlockStorage::new(db_path);
 
@@ -325,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_db_height_to_hash() {
-        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().to_str().unwrap();
         let mut storage = DbBlockStorage::new(db_path);
 
@@ -350,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_db_last_block_height() {
-        let temp_dir = TempDir::new("test_db_block_storage").unwrap();
+        let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().to_str().unwrap();
         let mut storage = DbBlockStorage::new(db_path);
 

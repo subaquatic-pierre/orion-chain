@@ -107,7 +107,7 @@ impl Display for PrivateKey {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::fs;
 
     use crate::crypto::public_key;

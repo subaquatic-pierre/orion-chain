@@ -13,6 +13,7 @@ pub enum CoreError {
     Transaction(String),
     Block(String),
     CryptoError(String),
+    State(String),
 }
 
 impl Error for CoreError {}
@@ -25,6 +26,7 @@ impl Display for CoreError {
             Self::Transaction(msg) => write!(f, "{}", msg),
             Self::Block(msg) => write!(f, "{}", msg),
             Self::CryptoError(msg) => write!(f, "{}", msg),
+            Self::State(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -73,6 +75,7 @@ impl Responder for CoreError {
             Self::Transaction(msg) => msg,
             Self::Block(msg) => msg,
             Self::CryptoError(msg) => msg,
+            Self::State(msg) => msg,
         };
 
         let status = StatusCode::from_u16(403).unwrap_or(StatusCode::BAD_REQUEST);

@@ -87,6 +87,7 @@ impl ChainNode {
             clear_all_data().unwrap()
         }
 
+        // TODO: do not start chain with genesis, start from storage
         let chain = Blockchain::new_with_genesis().unwrap();
 
         let (tx, rx) = channel::<RpcChanMsg>();
@@ -98,13 +99,13 @@ impl ChainNode {
 
         let tcp_controller = ArcMut::new(tcp_controller);
 
+        let mem_pool = ArcMut::new(TxPool::new());
+        let chain = ArcMut::new(chain);
         let validator = ArcMut::new(Validator::new(
+            chain.clone(),
             config.private_key.clone(),
             config.mem_pool_size,
         ));
-
-        let mem_pool = ArcMut::new(TxPool::new());
-        let chain = ArcMut::new(chain);
 
         let rpc_controller = RpcController::new(
             mem_pool.clone(),
@@ -112,6 +113,7 @@ impl ChainNode {
             chain.clone(),
             tcp_controller.clone(),
         );
+
         let rpc_controller = Arc::new(rpc_controller);
 
         Self {
@@ -156,7 +158,7 @@ impl ChainNode {
 
         // Spawn validator thread if ChainNode is validator
         // TODO: Check if is full node in config, if not full node then validator is not needed
-        self.spawn_validator_thread();
+        self.spawn_propose_block_thread();
 
         Ok(())
     }
@@ -191,7 +193,7 @@ impl ChainNode {
     }
 
     // TODO: change validator to VM
-    fn spawn_validator_thread(&self) {
+    fn spawn_propose_block_thread(&self) {
         let block_time = self.config.block_time;
         let validator = self.validator.clone();
         let mem_pool = self.mem_pool.clone();
@@ -206,35 +208,26 @@ impl ChainNode {
 
                 // TODO: check is node is full validator node or just slim node
 
-                let mut validator = lock!(validator);
+                let validator = lock!(validator);
                 if let Ok(mut pool) = mem_pool.lock() {
                     // validator takes transactions from mem pool on each block duration
                     let txs = pool.take(validator.pool_size);
 
                     if let Ok(mut chain) = chain.lock() {
-                        if let Some(last_block) = chain.last_block() {
-                            if let Ok(block) = validator.validate_block(last_block.header(), txs) {
-                                // TODO: propose block to network
-                                // broadcast added block
-                                // once block is confirmed by majority voting
-                                // adding block to chain is handled by RPC Controller
-                                if let Err(e) = chain.add_block(block) {
-                                    error!(
-                                        "unable to add block in ChainNode::spawn_validator_thread: {e}"
-                                    );
-                                }
+                        if let Ok(block) = validator.propose_block(txs) {
+                            // TODO: propose block to network
+                            // broadcast added block
+                            // once block is confirmed by majority voting
+                            // adding block to chain is handled by RPC Controller
+                            if let Err(e) = chain.add_block(block) {
+                                error!(
+                                    "unable to add block in ChainNode::spawn_validator_thread: {e}"
+                                );
                             }
-                        } else {
-                            error!(
-                                "unable to get last block chain in ChainNode::spawn_validator_thread"
-                            );
                         }
                     } else {
                         error!("unable to lock chain in ChainNode::spawn_validator_thread");
                     }
-
-                    // update last block time
-                    validator.last_block_time = Instant::now();
                 }
             }
         });

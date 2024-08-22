@@ -286,7 +286,7 @@ impl Read for VecBuf {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::io::BufWriter;
 
     use crate::{

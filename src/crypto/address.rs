@@ -64,7 +64,7 @@ impl HexEncoding<Address> for Address {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::crypto::{error::CryptoError, private_key::PrivateKey};
 

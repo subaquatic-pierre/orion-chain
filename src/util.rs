@@ -6,7 +6,7 @@ macro_rules! lock {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::sync::Arc;
 
     use crate::network::types::ArcMut;
