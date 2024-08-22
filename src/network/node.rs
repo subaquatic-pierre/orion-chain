@@ -34,7 +34,7 @@ use crate::{
         transaction::Transaction,
     },
     crypto::{private_key::PrivateKey, utils::random_hash},
-    vm::validator::Validator,
+    vm::validator::BlockValidator,
     GenericError,
 };
 
@@ -75,7 +75,7 @@ pub struct ChainNode {
     rpc_rx: ArcMut<Receiver<RpcChanMsg>>,
     rpc_tx: ArcMut<Sender<RpcChanMsg>>,
     mem_pool: ArcMut<TxPool>,
-    validator: ArcMut<Validator>,
+    validator: ArcMut<BlockValidator>,
     pub chain: ArcMut<Blockchain>,
     rpc_controller: Arc<RpcController>,
 }
@@ -101,8 +101,7 @@ impl ChainNode {
 
         let mem_pool = ArcMut::new(TxPool::new());
         let chain = ArcMut::new(chain);
-        let validator = ArcMut::new(Validator::new(
-            chain.clone(),
+        let validator = ArcMut::new(BlockValidator::new(
             config.private_key.clone(),
             config.mem_pool_size,
         ));
@@ -199,35 +198,37 @@ impl ChainNode {
         let mem_pool = self.mem_pool.clone();
         let chain = self.chain.clone();
 
-        // TODO: check if ChainNode has block validator
-        // spawn mining thread if exists
         thread::spawn(move || {
             loop {
                 thread::sleep(block_time);
                 // TODO: check is validator is current leader
-
-                // TODO: check is node is full validator node or just slim node
-
                 let validator = lock!(validator);
                 if let Ok(mut pool) = mem_pool.lock() {
                     // validator takes transactions from mem pool on each block duration
                     let txs = pool.take(validator.pool_size);
 
                     if let Ok(mut chain) = chain.lock() {
-                        if let Ok(block) = validator.propose_block(txs) {
-                            // TODO: propose block to network
-                            // broadcast added block
-                            // once block is confirmed by majority voting
-                            // adding block to chain is handled by RPC Controller
-                            if let Err(e) = chain.add_block(block) {
-                                error!(
-                                    "unable to add block in ChainNode::spawn_validator_thread: {e}"
-                                );
+                        match validator.propose_block(&chain, &txs) {
+                            Ok(block) => {
+                                // TODO: propose block to network
+                                // broadcast added block
+                                // once block is confirmed by majority voting
+                                // adding block to chain is handled by RPC Controller
+                                if let Err(e) = chain.add_block(block) {
+                                    error!(
+                                        "unable to add block in ChainNode::spawn_validator_thread: {e}"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                error!("unable to propose block: {e}");
                             }
                         }
                     } else {
                         error!("unable to lock chain in ChainNode::spawn_validator_thread");
                     }
+                } else {
+                    error!("unable to lock mem_pool in ChainNode::spawn_validator_thread");
                 }
             }
         });
@@ -237,7 +238,6 @@ impl ChainNode {
 fn clear_all_data() -> Result<(), Box<dyn Error>> {
     let block_data_dir = PathBuf::from("data/chain.db");
     let state_data_dir = PathBuf::from("data/state.db");
-    let mapping_file = PathBuf::from("data/height_to_hash.json");
 
     if block_data_dir.exists() && block_data_dir.is_dir() {
         fs::remove_dir_all(block_data_dir)?;
@@ -251,13 +251,6 @@ fn clear_all_data() -> Result<(), Box<dyn Error>> {
         debug!("State Data and its contents removed successfully.");
     } else {
         debug!("State Data directory does not exist.");
-    }
-
-    if mapping_file.exists() {
-        fs::remove_file(mapping_file)?;
-        debug!("Height to Hash mapping removed successfully.");
-    } else {
-        debug!("Height to Hash mapping does not exist.");
     }
 
     Ok(())

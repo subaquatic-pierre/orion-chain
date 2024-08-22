@@ -17,10 +17,10 @@ use crate::crypto::{
 
 use super::storage::DbBlockStorage;
 use super::{
-    block_manager::BlockManager,
     encoding::{ByteEncoding, HexEncoding},
     error::CoreError,
     header::Header,
+    manager::BlockManager,
     storage::{BlockStorage, MemoryBlockStorage},
     transaction::Transaction,
 };

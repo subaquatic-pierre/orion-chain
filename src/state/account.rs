@@ -8,8 +8,8 @@ use crate::core::error::CoreError;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Account {
     pub balance: u64,
-    pub nonce: u64,
-    // Add other account fields as needed
+    // TODO: implement nonce on account
+    // pub nonce: u64,
 }
 
 impl ByteEncoding<Account> for Account {

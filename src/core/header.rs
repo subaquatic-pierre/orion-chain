@@ -120,11 +120,6 @@ impl Header {
 
         Ok(hasher.finalize()?)
     }
-
-    pub fn gen_state_root() -> Result<Hash, CoreError> {
-        debug!("NEED TO IMPLEMENT Header::gen_state_root!!!");
-        Ok(random_hash())
-    }
 }
 
 impl ByteEncoding<Header> for Header {

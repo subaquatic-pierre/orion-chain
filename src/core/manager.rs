@@ -27,33 +27,31 @@ use super::{
 };
 
 pub struct BlockManager {
-    blocks: Vec<Block>,
     store: Box<dyn BlockStorage>,
 }
 
 impl BlockManager {
     pub fn new(storage_path: &str) -> Self {
         Self {
-            blocks: vec![],
             store: DbBlockStorage::new_boxed(storage_path),
         }
     }
 
-    pub fn headers(&self) -> Vec<&Header> {
-        let mut headers = vec![];
-        for block in &self.blocks {
-            headers.push(&block.header);
-        }
-        headers
-    }
+    // pub fn headers(&self) -> Vec<&Header> {
+    //     let mut headers = vec![];
+    //     for block in &self.blocks {
+    //         headers.push(&block.header);
+    //     }
+    //     headers
+    // }
 
-    pub fn blocks(&self) -> Vec<&Block> {
-        let mut blocks = vec![];
-        for block in &self.blocks {
-            blocks.push(block);
-        }
-        blocks
-    }
+    // pub fn blocks(&self) -> Vec<&Block> {
+    //     let mut blocks = vec![];
+    //     for block in &self.blocks {
+    //         blocks.push(block);
+    //     }
+    //     blocks
+    // }
 
     pub fn add(&mut self, block: Block) -> Result<(), CoreError> {
         info!(
@@ -129,7 +127,6 @@ impl BlockManager {
 
     pub fn new_in_memory() -> Self {
         Self {
-            blocks: vec![],
             store: MemoryBlockStorage::new_boxed(),
         }
     }
@@ -150,23 +147,4 @@ mod tests {
     use crate::core::header::random_header;
 
     use super::*;
-
-    #[test]
-    fn test_header_manager() {
-        let mut manager = BlockManager::new_in_memory();
-
-        for _ in 0..5 {
-            let header = random_header(1, random_hash());
-            let block = random_block(header);
-
-            manager.add(block).unwrap();
-        }
-
-        let headers = manager.headers();
-        let blocks = manager.blocks();
-
-        assert_eq!(headers.len(), blocks.len());
-    }
-
-    // TODO: Test block manager with DbBlockStorage
 }

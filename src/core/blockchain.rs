@@ -1,23 +1,29 @@
 use log::info;
 
-use crate::crypto::hash::Hash;
+use crate::{crypto::hash::Hash, state::manager::StateManager};
 
 use super::{
     block::{random_block, Block},
-    block_manager::BlockManager,
     error::CoreError,
     header::{random_header, Header},
+    manager::BlockManager,
     storage::BlockStorage,
 };
 
 pub struct Blockchain {
     block_manager: BlockManager,
+    state_manager: StateManager,
 }
 
 impl Blockchain {
-    pub fn new(storage_path: &str, genesis_block: Block) -> Result<Self, CoreError> {
+    pub fn new(
+        state_storage_path: &str,
+        block_storage_path: &str,
+        genesis_block: Block,
+    ) -> Result<Self, CoreError> {
         let mut bc = Self {
-            block_manager: BlockManager::new(storage_path),
+            block_manager: BlockManager::new(block_storage_path),
+            state_manager: StateManager::new(state_storage_path),
         };
 
         bc.add_block_without_validation(genesis_block)?;
@@ -60,6 +66,10 @@ impl Blockchain {
             .map(|b| b.header.prev_hash())
     }
 
+    pub fn state(&self) -> &StateManager {
+        &self.state_manager
+    }
+
     // ---
     // Private Methods
     // ---
@@ -93,6 +103,7 @@ impl Blockchain {
     pub fn new_in_memory() -> Result<Self, CoreError> {
         let bc: Blockchain = Self {
             block_manager: BlockManager::new_in_memory(),
+            state_manager: StateManager::new_in_memory(),
         };
 
         Ok(bc)
@@ -103,6 +114,7 @@ impl Default for Blockchain {
     fn default() -> Self {
         Self {
             block_manager: BlockManager::default(),
+            state_manager: StateManager::default(),
         }
     }
 }
