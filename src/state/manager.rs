@@ -40,7 +40,7 @@ impl StateManager {
         self.store.rollback_accounts()
     }
 
-    pub fn commit(&self) -> Result<(), CoreError> {
+    pub fn clear_backups(&self) -> Result<(), CoreError> {
         self.store.clear_account_backups()
     }
 

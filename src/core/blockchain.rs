@@ -1,6 +1,10 @@
 use log::info;
 
-use crate::{crypto::hash::Hash, state::manager::StateManager, vm::runtime::ValidatorRuntime};
+use crate::{
+    crypto::hash::Hash,
+    state::manager::StateManager,
+    vm::{runtime::ValidatorRuntime, types::RuntimeExecData},
+};
 
 use super::{
     block::{random_block, Block},
@@ -36,11 +40,9 @@ impl Blockchain {
     pub fn commit_block(&mut self, block: Block) -> Result<(), CoreError> {
         let state = self.state();
         for tx in block.txs() {
-            self.runtime.execute(tx, state)?;
+            let exec_data = RuntimeExecData::new(tx, state);
+            self.runtime.execute(exec_data)?;
         }
-
-        // Finalize and persist state changes
-        state.commit()?;
 
         // Add the block to the chain
         self.add_block(block)?;

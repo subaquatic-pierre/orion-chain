@@ -20,6 +20,7 @@ use crate::{
 };
 
 use super::runtime::ValidatorRuntime;
+use super::types::RuntimeExecData;
 
 pub struct BlockValidator {
     private_key: PrivateKey,
@@ -80,7 +81,8 @@ impl BlockValidator {
         // Execute and validate all transactions in the block
         let state = chain.state();
         for tx in block.txs() {
-            self.runtime.execute(tx, state)?;
+            let exec_data = RuntimeExecData::new_with_backup(tx, state);
+            self.runtime.execute(exec_data)?;
         }
 
         // Verify the state root after applying all transactions
@@ -117,7 +119,8 @@ impl BlockValidator {
         // execute each tx and backup each account
         for tx in &txs {
             // TODO: handle tx error case
-            self.runtime.execute(tx, state)?
+            let exec_data = RuntimeExecData::new_with_backup(tx, state);
+            self.runtime.execute(exec_data)?;
         }
         // calc new state_root after txs are applied
         let state_root = state.gen_state_root()?;
@@ -251,7 +254,6 @@ mod tests {
         state
             .set_account(&private_key.address(), &Account { balance: 100 })
             .unwrap();
-        state.commit().unwrap();
 
         let txs = vec![build_tx(&private_key)];
         let block = validator.propose_block(&chain, txs).unwrap();
@@ -276,7 +278,6 @@ mod tests {
         state
             .set_account(&private_key.address(), &Account { balance: 100 })
             .unwrap();
-        state.commit().unwrap();
 
         let txs = vec![build_tx(&private_key)];
 
@@ -300,7 +301,6 @@ mod tests {
         state
             .set_account(&private_key.address(), &Account { balance: 100 })
             .unwrap();
-        state.commit().unwrap();
 
         let txs = vec![build_tx(&private_key)];
         let result = validator.propose_block(&chain, txs);
@@ -322,7 +322,6 @@ mod tests {
         state
             .set_account(&private_key.address(), &Account { balance: 100 })
             .unwrap();
-        state.commit().unwrap();
 
         let txs = vec![build_tx(&private_key)];
         let result = validator.propose_block(&chain, txs);

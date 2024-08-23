@@ -187,7 +187,7 @@ impl StateStorage {
 
         for iter in backup_iter {
             match iter {
-                Ok((key, value)) => {
+                Ok((key, _)) => {
                     let addr_str = String::from_utf8(key.to_vec()).map_err(|e| {
                         CoreError::State(format!("failed to convert key to string: {}", e))
                     })?;

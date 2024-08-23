@@ -7,6 +7,8 @@ use crate::{
     state::manager::StateManager,
 };
 
+use super::types::RuntimeExecData;
+
 pub struct ValidatorRuntime;
 
 impl ValidatorRuntime {
@@ -14,15 +16,17 @@ impl ValidatorRuntime {
         Self
     }
 
-    pub fn execute(&self, tx: &Transaction, state: &StateManager) -> Result<(), CoreError> {
+    pub fn execute(&self, exec_data: RuntimeExecData) -> Result<(), CoreError> {
+        let RuntimeExecData { tx, state, backup } = exec_data;
+
         match tx.tx_type {
             TxType::BlockReward | TxType::GasReward => {
                 let data = BlockRewardData::from_bytes(&tx.data)?;
-                self.execute_block_reward(data, state)
+                self.execute_block_reward(data, state, backup)
             }
             TxType::Transfer => {
                 let data = TransferData::from_bytes(&tx.data)?;
-                self.execute_transfer(data, state)
+                self.execute_transfer(data, state, backup)
             }
             _ => todo!(),
         }
@@ -32,8 +36,11 @@ impl ValidatorRuntime {
         &self,
         data: BlockRewardData,
         state: &StateManager,
+        backup: bool,
     ) -> Result<(), CoreError> {
-        state.backup_account(&data.to)?;
+        if backup {
+            state.backup_account(&data.to)?;
+        }
 
         let mut to_account = state
             .get_account(&data.to)
@@ -46,9 +53,16 @@ impl ValidatorRuntime {
         Ok(())
     }
 
-    fn execute_transfer(&self, data: TransferData, state: &StateManager) -> Result<(), CoreError> {
-        state.backup_account(&data.from)?;
-        state.backup_account(&data.to)?;
+    fn execute_transfer(
+        &self,
+        data: TransferData,
+        state: &StateManager,
+        backup: bool,
+    ) -> Result<(), CoreError> {
+        if backup {
+            state.backup_account(&data.from)?;
+            state.backup_account(&data.to)?;
+        }
 
         let mut from_account = state
             .get_account(&data.from)
