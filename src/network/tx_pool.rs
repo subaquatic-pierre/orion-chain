@@ -69,7 +69,7 @@ mod tests {
         let txs: Vec<Transaction> = (0..20)
             .map(|i| {
                 let (sender, receiver) = random_sender_receiver();
-                Transaction::new_transfer(sender, receiver, r_hash, &[i]).unwrap()
+                Transaction::new_transfer(sender, receiver, r_hash, &[i], 7).unwrap()
             })
             .collect();
 
@@ -91,7 +91,8 @@ mod tests {
         let (sender, receiver) = random_sender_receiver();
         let txs: Vec<Transaction> = (0..20)
             .map(|i| {
-                Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[i]).unwrap()
+                Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[i], 7)
+                    .unwrap()
             })
             .collect();
 
@@ -103,13 +104,16 @@ mod tests {
 
         assert_eq!(txs.len(), 3);
 
-        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1]).unwrap();
+        let tx =
+            Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1], 7).unwrap();
         assert_eq!(txs.contains(&tx), true);
 
-        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[4]).unwrap();
+        let tx =
+            Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[4], 7).unwrap();
         assert_eq!(txs.contains(&tx), false);
 
-        let tx = Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1]).unwrap();
+        let tx =
+            Transaction::new_transfer(sender.clone(), receiver.clone(), r_hash, &[1], 7).unwrap();
 
         assert_eq!(tx_pool.len(), 17);
         assert_eq!(tx_pool.has(&tx), false);

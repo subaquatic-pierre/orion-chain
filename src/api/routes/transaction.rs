@@ -75,7 +75,7 @@ pub async fn new_tx(
     // TODO: Tx should be completed and signed by client
     let (sender, receiver) = random_sender_receiver();
     let hash = random_hash();
-    let new_tx = Transaction::new_transfer(sender, receiver, hash, &bytes)?;
+    let new_tx = Transaction::new_transfer(sender, receiver, hash, &bytes, 9)?;
 
     debug!("NEW TX REQ :{new_tx:?}",);
 

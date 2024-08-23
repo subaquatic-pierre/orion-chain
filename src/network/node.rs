@@ -208,7 +208,7 @@ impl ChainNode {
                     let txs = pool.take(validator.pool_size);
 
                     if let Ok(mut chain) = chain.lock() {
-                        match validator.propose_block(&chain, &txs) {
+                        match validator.propose_block(&chain, txs) {
                             Ok(block) => {
                                 // TODO: propose block to network
                                 // broadcast added block

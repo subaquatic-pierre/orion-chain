@@ -49,14 +49,6 @@ impl Block {
         Ok(b)
     }
 
-    pub fn txs(&self) -> Vec<&Transaction> {
-        let mut txs = vec![];
-        for tx in &self.transactions {
-            txs.push(tx)
-        }
-        txs
-    }
-
     pub fn header(&self) -> &Header {
         &self.header
     }
@@ -117,6 +109,10 @@ impl Block {
 
     pub fn height(&self) -> usize {
         self.header.height as usize
+    }
+
+    pub fn txs(&self) -> &[Transaction] {
+        &self.transactions
     }
 
     // ---
@@ -226,7 +222,7 @@ mod tests {
         let (sender, receiver) = random_sender_receiver();
 
         let mut new_tx =
-            Transaction::new_transfer(sender, receiver, r_hash, b"Cool World").unwrap();
+            Transaction::new_transfer(sender, receiver, r_hash, b"Cool World", 4).unwrap();
         new_tx.sign(&private_key).unwrap();
         block.add_transaction(new_tx).unwrap();
         // block.transactions.push(Transaction::new_transfer(b"hello world"));
@@ -242,7 +238,7 @@ mod tests {
 
         block
             .transactions
-            .push(Transaction::new_transfer(sender, receiver, r_hash, b"hello world").unwrap());
+            .push(Transaction::new_transfer(sender, receiver, r_hash, b"hello world", 4).unwrap());
 
         let msg = "transaction has no signature".to_string();
 

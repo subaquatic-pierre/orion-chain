@@ -2,7 +2,7 @@ use crate::{
     core::{
         encoding::ByteEncoding,
         error::CoreError,
-        transaction::{Transaction, TransactionType, TransferData},
+        transaction::{BlockRewardData, Transaction, TransferData, TxType},
     },
     state::manager::StateManager,
 };
@@ -16,12 +16,34 @@ impl ValidatorRuntime {
 
     pub fn execute(&self, tx: &Transaction, state: &StateManager) -> Result<(), CoreError> {
         match tx.tx_type {
-            TransactionType::Transfer => {
+            TxType::BlockReward | TxType::GasReward => {
+                let data = BlockRewardData::from_bytes(&tx.data)?;
+                self.execute_block_reward(data, state)
+            }
+            TxType::Transfer => {
                 let data = TransferData::from_bytes(&tx.data)?;
                 self.execute_transfer(data, state)
             }
             _ => todo!(),
         }
+    }
+
+    fn execute_block_reward(
+        &self,
+        data: BlockRewardData,
+        state: &StateManager,
+    ) -> Result<(), CoreError> {
+        state.backup_account(&data.to)?;
+
+        let mut to_account = state
+            .get_account(&data.to)
+            .ok_or_else(|| CoreError::State("account not found".to_string()))?;
+
+        to_account.balance += data.amount;
+
+        state.set_account(&data.to, &to_account)?;
+
+        Ok(())
     }
 
     fn execute_transfer(&self, data: TransferData, state: &StateManager) -> Result<(), CoreError> {

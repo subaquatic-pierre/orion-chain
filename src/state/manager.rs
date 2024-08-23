@@ -29,19 +29,24 @@ impl StateManager {
     pub fn backup_account(&self, address: &Address) -> Result<(), CoreError> {
         match self.get_account(address) {
             Some(acc) => self.store.backup_account(address, &acc),
-            None => Err(CoreError::State(format!(
-                "account with address: {} not found",
-                address.to_hex()?
-            ))),
+            None => {
+                // no account exists for address, create new blank account
+                self.store.set_account(address, &Account::new())
+            }
         }
     }
 
-    pub fn rollback_accounts(&self) -> Result<(), CoreError> {
+    pub fn rollback(&self) -> Result<(), CoreError> {
         self.store.rollback_accounts()
     }
 
+    pub fn commit(&self) -> Result<(), CoreError> {
+        self.store.clear_account_backups()
+    }
+
     pub fn gen_state_root(&self) -> Result<Hash, CoreError> {
-        Ok(random_hash())
+        let hash = Hash::new(&[1_u8; 32])?;
+        Ok(hash)
     }
 
     pub fn new_in_memory() -> Self {

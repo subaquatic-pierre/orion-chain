@@ -150,7 +150,7 @@ impl StateStorage {
                     self.set_account(&address, &account)?;
 
                     // add key to batch delete which will clear all account backups at end
-                    batch.delete_cf(backup_handle, &key);
+                    batch.delete_cf(backup_handle, &addr_str);
                 }
                 Err(e) => {
                     error!("unable to iterate through account_backup_cf in StateStorage.rollback_accounts, {e}")
@@ -165,6 +165,49 @@ impl StateStorage {
                 "failed to apply delete all backup accounts batch operations to backup column family: {e}"
             ))
         })?;
+
+        Ok(())
+    }
+
+    pub fn clear_account_backups(&self) -> Result<(), CoreError> {
+        // Iterate over all key-value pairs in the backup column family        // Get the handle for the backup column family
+        let backup_handle = match self.db.cf_handle(&self.backup_account_cf) {
+            Some(handle) => handle,
+            None => {
+                return Err(CoreError::State(
+                    "unable to get ColumnFamily handle in rollback_account_backups".to_string(),
+                ))
+            }
+        };
+        let backup_iter = self
+            .db
+            .iterator_cf(backup_handle, rocksdb::IteratorMode::Start);
+
+        let mut batch = WriteBatch::default();
+
+        for iter in backup_iter {
+            match iter {
+                Ok((key, value)) => {
+                    let addr_str = String::from_utf8(key.to_vec()).map_err(|e| {
+                        CoreError::State(format!("failed to convert key to string: {}", e))
+                    })?;
+
+                    // add key to batch delete which will clear all account backups at end
+                    batch.delete_cf(backup_handle, &addr_str);
+                }
+                Err(e) => {
+                    error!("unable to iterate through account_backup_cf in StateStorage.rollback_accounts, {e}")
+                }
+            }
+        }
+
+        // Clear all entries in the backup column family
+        // Apply the batch delete operations
+        self.db.write(batch).map_err(|e| {
+            CoreError::State(format!(
+                "failed to apply delete all backup accounts batch operations to backup column family: {e}"
+                    ))
+            })?;
 
         Ok(())
     }

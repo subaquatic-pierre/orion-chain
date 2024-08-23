@@ -12,6 +12,12 @@ pub struct Account {
     // pub nonce: u64,
 }
 
+impl Account {
+    pub fn new() -> Self {
+        Self { balance: 0 }
+    }
+}
+
 impl ByteEncoding<Account> for Account {
     fn from_bytes(data: &[u8]) -> Result<Account, CoreError> {
         Ok(bincode::deserialize(data)?)

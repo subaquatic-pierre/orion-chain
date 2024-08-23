@@ -23,12 +23,13 @@ use super::{
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, BorshDeserialize, BorshSerialize)]
 pub struct Transaction {
-    pub tx_type: TransactionType,
+    pub tx_type: TxType,
     pub data: Vec<u8>,
     pub receiver: Address,
     pub sender: Address,
     pub blockhash: Hash,
     pub hash: Option<Hash>,
+    pub gas_limit: u64,
     pub signature: Option<SignatureBytes>,
     pub signer: Option<PublicKeyBytes>,
 }
@@ -41,11 +42,12 @@ pub struct TxVerificationData {
 
 impl Transaction {
     pub fn new(
-        tx_type: TransactionType,
+        tx_type: TxType,
         blockhash: Hash,
         receiver: Address,
         sender: Address,
         data: &[u8],
+        gas_limit: u64,
     ) -> Result<Self, CoreError> {
         let data = data.to_vec();
 
@@ -55,6 +57,7 @@ impl Transaction {
             receiver,
             sender,
             blockhash,
+            gas_limit,
             signature: None,
             signer: None,
             hash: None,
@@ -66,13 +69,15 @@ impl Transaction {
         sender: Address,
         blockhash: Hash,
         data: &[u8],
+        gas_limit: u64,
     ) -> Result<Self, CoreError> {
         Ok(Self {
-            tx_type: TransactionType::Transfer,
+            tx_type: TxType::Transfer,
             receiver,
             sender,
             data: data.to_vec(),
             blockhash,
+            gas_limit,
             signature: None,
             signer: None,
             hash: None,
@@ -216,12 +221,14 @@ impl HexEncoding<Transaction> for Transaction {
 }
 
 #[derive(Debug, Clone, PartialEq, BorshDeserialize, BorshSerialize)]
-pub enum TransactionType {
+pub enum TxType {
     Transfer,
     SmartContract,
+    BlockReward,
+    GasReward,
 }
 
-impl ByteEncoding<TransactionType> for TransactionType {
+impl ByteEncoding<TxType> for TxType {
     fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
         match borsh::to_vec(self) {
             Ok(b) => Ok(b),
@@ -229,7 +236,7 @@ impl ByteEncoding<TransactionType> for TransactionType {
         }
     }
 
-    fn from_bytes(data: &[u8]) -> Result<TransactionType, CoreError> {
+    fn from_bytes(data: &[u8]) -> Result<TxType, CoreError> {
         match borsh::from_slice(data) {
             Ok(t) => Ok(t),
             Err(e) => Err(CoreError::Parsing(e.to_string())),
@@ -241,7 +248,6 @@ impl ByteEncoding<TransactionType> for TransactionType {
 pub struct TransferData {
     pub to: Address,
     pub from: Address,
-    pub gas_limit: u64,
     pub amount: u64,
 }
 
@@ -264,7 +270,6 @@ impl ByteEncoding<TransferData> for TransferData {
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct SmartContractData {
     pub contract_address: Address,
-    pub gas_limit: u64,
     pub method: String,
     pub params: Vec<u8>,
 }
@@ -285,6 +290,28 @@ impl ByteEncoding<SmartContractData> for SmartContractData {
     }
 }
 
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct BlockRewardData {
+    pub to: Address,
+    pub amount: u64,
+}
+
+impl ByteEncoding<BlockRewardData> for BlockRewardData {
+    fn to_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        match borsh::to_vec(self) {
+            Ok(b) => Ok(b),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+
+    fn from_bytes(data: &[u8]) -> Result<BlockRewardData, CoreError> {
+        match borsh::from_slice(data) {
+            Ok(t) => Ok(t),
+            Err(e) => Err(CoreError::Parsing(e.to_string())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::crypto::{address::random_sender_receiver, utils::random_hash};
@@ -298,7 +325,7 @@ mod tests {
         let data = b"Hello world, Data is cool";
         let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data, 3).unwrap();
 
         assert!(matches!(tx.verify(), Err(_)));
 
@@ -313,7 +340,7 @@ mod tests {
         let data = b"Hello world, Data is cool";
         let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data, 3).unwrap();
 
         // try double sign
         tx.sign(&priv_key).unwrap();
@@ -327,7 +354,7 @@ mod tests {
         let data = b"Hello world, Data is cool";
         let (sender, receiver) = random_sender_receiver();
 
-        let tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
+        let tx = Transaction::new_transfer(sender, receiver, r_hash, data, 3).unwrap();
         assert_eq!(tx.data_str(), "Hello world, Data is cool");
     }
 
@@ -338,7 +365,7 @@ mod tests {
         let data = b"Hello world, Data is cool";
         let (sender, receiver) = random_sender_receiver();
 
-        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data, 3).unwrap();
 
         tx.sign(&priv_key).unwrap();
         let bytes = &tx.to_bytes().unwrap();
@@ -371,7 +398,7 @@ mod tests {
         let (sender, receiver) = random_sender_receiver();
         let r_hash = random_hash();
 
-        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data).unwrap();
+        let mut tx = Transaction::new_transfer(sender, receiver, r_hash, data, 3).unwrap();
         let _hex_str = tx.to_hex().unwrap();
 
         tx.sign(&priv_key).unwrap();
@@ -408,9 +435,15 @@ mod tests {
 
 pub fn random_tx() -> Transaction {
     let r_hash = random_hash();
-    let bytes = random_bytes(8);
     let (sender, receiver) = random_sender_receiver();
-    Transaction::new_transfer(sender, receiver, r_hash, &bytes).unwrap()
+    let bytes = TransferData {
+        to: receiver.clone(),
+        from: sender.clone(),
+        amount: 42,
+    }
+    .to_bytes()
+    .unwrap();
+    Transaction::new_transfer(sender, receiver, r_hash, &bytes, 3).unwrap()
 }
 
 pub fn random_signed_tx() -> Transaction {

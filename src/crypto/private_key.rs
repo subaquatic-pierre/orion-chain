@@ -13,7 +13,7 @@ use std::io::Write;
 use std::{fmt::Display, fs::File};
 use std::{io::Read, path::Path};
 
-use super::{error::CryptoError, public_key::PublicKey, signature::Signature};
+use super::{address::Address, error::CryptoError, public_key::PublicKey, signature::Signature};
 
 #[derive(Clone)]
 pub struct PrivateKey {
@@ -25,6 +25,10 @@ impl PrivateKey {
         Self {
             key: SigningKey::random(&mut OsRng),
         }
+    }
+
+    pub fn address(&self) -> Address {
+        self.pub_key().address().unwrap()
     }
 
     pub fn pub_key(&self) -> PublicKey {

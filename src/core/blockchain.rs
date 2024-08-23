@@ -1,6 +1,6 @@
 use log::info;
 
-use crate::{crypto::hash::Hash, state::manager::StateManager};
+use crate::{crypto::hash::Hash, state::manager::StateManager, vm::runtime::ValidatorRuntime};
 
 use super::{
     block::{random_block, Block},
@@ -13,6 +13,7 @@ use super::{
 pub struct Blockchain {
     block_manager: BlockManager,
     state_manager: StateManager,
+    runtime: ValidatorRuntime,
 }
 
 impl Blockchain {
@@ -24,11 +25,27 @@ impl Blockchain {
         let mut bc = Self {
             block_manager: BlockManager::new(block_storage_path),
             state_manager: StateManager::new(state_storage_path),
+            runtime: ValidatorRuntime::new(),
         };
 
         bc.add_block_without_validation(genesis_block)?;
 
         Ok(bc)
+    }
+
+    pub fn commit_block(&mut self, block: Block) -> Result<(), CoreError> {
+        let state = self.state();
+        for tx in block.txs() {
+            self.runtime.execute(tx, state)?;
+        }
+
+        // Finalize and persist state changes
+        state.commit()?;
+
+        // Add the block to the chain
+        self.add_block(block)?;
+
+        Ok(())
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), CoreError> {
@@ -37,6 +54,7 @@ impl Blockchain {
                 "blockchain already contains block".to_string(),
             ));
         }
+
         self.block_manager.add(block)
     }
 
@@ -104,6 +122,7 @@ impl Blockchain {
         let bc: Blockchain = Self {
             block_manager: BlockManager::new_in_memory(),
             state_manager: StateManager::new_in_memory(),
+            runtime: ValidatorRuntime::new(),
         };
 
         Ok(bc)
@@ -115,6 +134,7 @@ impl Default for Blockchain {
         Self {
             block_manager: BlockManager::default(),
             state_manager: StateManager::default(),
+            runtime: ValidatorRuntime::new(),
         }
     }
 }

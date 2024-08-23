@@ -70,7 +70,7 @@ impl RpcController {
                     Err(msg) => Ok(RpcResponse::Generic(msg.to_string())),
                 }
             }
-            RpcHeader::NewBlock => {
+            RpcHeader::CommitBlock => {
                 debug!("rpc message received in handler at RpcHeader::NewBlock");
 
                 Ok(RpcResponse::Generic(format!("Generic response")))

@@ -27,8 +27,10 @@ pub enum RpcHeader {
     GetChainHeight,
     GetTx,
     NewTx,
-    NewBlock,
     Generic,
+    CommitBlock,
+    BlockProposal,
+    BlockVote,
 }
 
 impl From<u16> for RpcHeader {
